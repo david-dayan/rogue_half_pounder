@@ -1,0 +1,299 @@
+Assay	Presumed Type
+OmyY1_2SEXY	Sex Marker
+OMS00127	Neutral
+Omy_hsc715-80	Neutral
+Omy_hsf1b-241	Neutral
+Omy_u09-56.119	Neutral
+Omy_cox1-221	Neutral
+OMGH1PROM1-SNP1	Neutral
+Omy_crb-106	Neutral
+Omy_cox2-335	Neutral
+OMS00068	Neutral
+Omy_RAD62596-38	Neutral
+Omy_97660-230	Neutral
+Omy_BAC-B4-324	Neutral
+Omy_carban1-264	Neutral
+Omy_RAD52458-17	Adaptive. Run Timing
+Omy_109894-185	Neutral
+Omy_113490-159	Neutral
+Omy_U11_2b-154	Neutral
+Omy_mapK3-103	Neutral. Possible linkage
+OMS00151	Neutral
+Omy_p53-262	Neutral
+Omy_nxt2-273	Neutral
+OMS00089	Neutral
+Omy_RAD58213-70	Neutral
+Omy_109243-222	Neutral
+Omy_myoD-178	Neutral
+Omy_u09-61.043	Neutral
+Omy_RAD27740-55	"Adaptive. Mean wind velocity. Basin-wide, top-outlier"
+Omy_metA-161	Neutral
+Omy_117540-259	Neutral
+Omy_GH1P1_2	Neutral
+Omy_oxct-85	Neutral
+Omy_ca050-64	Neutral
+Omy_g1-103	Neutral
+Omy_109525-403	Neutral
+OMS00174	Neutral
+Omy_RAD32139-58	"Adaptive. Basin-wide, top-outlier"
+Omy_BAC-F5.284	Neutral
+Omy_nips-299	Neutral
+Omy_RAD47080-54	Adaptive. Run Timing
+Omy_tlr5-205	Neutral
+Omy_cyp17-153	Neutral
+Omy_101993-189	Neutral
+OMS00078	Neutral
+Omy_vamp5-303	Neutral
+Omy_b1-266	Neutral
+Omy_hsf2-146	Neutral
+Omy_111084-526	Neutral
+OMS00133	Neutral
+Omy_128923-433	Neutral
+Omy_Ots249-227	Neutral
+OMS00153	Neutral
+Omy_sast-264	Neutral
+Omy_RAD42465-32	"Adaptive. Maxiumum air temperature (warmest quarter). Basin-wide, top-outlier"
+Omy_RAD7210-8	Neutral
+OMS00120	Neutral
+OMS00175	Neutral
+Omy_MYC_2	Neutral
+Omy_rapd-167	Neutral
+Omy_110064-419	Neutral
+OMS00101	Neutral
+Omy_107031-704	Neutral
+Omy_GHSR-121	Neutral. Possible linkage
+Omy_IL6-320	Neutral
+Omy_b9-164	Neutral
+Omy_srp09-37	Neutral
+Omy_RAD739-59	"Adaptive. Basin-wide, top-outlier"
+Omy_IL1b-163	Neutral
+Omy_131460-646	Neutral
+Omy_110201-359	Neutral
+Omy_vatf-406	Neutral
+Omy_RAD77789-54	Adaptive
+Omy_NaKATPa3-50	Neutral
+M09AAD.076	Neutral
+OMS00116	Neutral
+Omy_RAD15709-53	"Adaptive. Natal site Isothermality. Basin-wide, run-time - related"
+Omy_104519-624	Neutral
+Omy_gdh-271	Neutral
+Omy_RAD46452-51	"Adaptive. Mean annual precipitation. Basin-wide, top-outlier"
+Omy_105714-265	Neutral
+Omy_metB-138	Neutral
+Omy_gh-475	Neutral
+Omy_redd1-410	Neutral
+Omy_RAD19340-24	"Adaptive. Basin-wide, top-outlier"
+Omy_RAD37816-68	"Adaptive. Basin-wide, top-outlier"
+Omy_RAD12439-64	"Adaptive. Basin-wide, top-outlier"
+Omy_111666-301	Neutral
+Omy_105105-448	Neutral
+OMS00096	Neutral
+OMS00119	Neutral
+Omy_120255-332	Neutral
+Omy_hsp90BA-193	Neutral
+Omy_UT16_2-173	Neutral
+Omy_114976-223	Neutral
+OMS00052	Neutral
+Omy_UBA3b	Neutral
+Omy_RAD35417-9	Adaptive. 
+Omy_RAD13499-13	"Adaptive. Natal Site Diurnal Range. Basin-wide, precipitation-related; "
+Omy_RAD26691-36	"Adaptive. Maxiumum air temperature (warmest quarter). Basin-wide, top-outlier"
+Omy_ada10-71	Neutral
+Omy_LDHB-2_i6	Neutral
+Omy_RAD93580-37	"Adaptive. Basin-wide, top-outlier"
+Omy_107336-170	Neutral
+OMS00024	Neutral
+Omy_RAD20917-11	"Adaptive. Basin-wide, top-outlier"
+Omy_RAD17632-23	Neutral
+Omy_129870-756	Neutral
+Omy_117286-374	Neutral
+Omy_107285-69	Neutral
+OMS00048	Neutral
+Omy_110689-148	Neutral
+Omy_lpl-220	Neutral
+Omy_128996-481	Neutral
+Omy_ppie-232	Neutral
+OMS00087	Neutral
+Omy_RAD39156-33	"Adaptive. Natal site air temperature (warmest quarter). Basin-wide, top-outlier"
+Omy_u07-79-166	Neutral
+OMS00128	Neutral
+OMS00072	Neutral
+Omy_g12-82	Neutral
+Omy_RAD40132-55	"Adaptive. Natal site canopy cover. Basin-wide, top-outlier"
+Omy_e1-147	Neutral
+Omy_RAD49111-35	"Adaptive. Basin-wide, top-outlier"
+Omy_RAD1186-59	"Adaptive. Basin-wide, top-outlier"
+Omy_GREB1_09	Adaptive. Run Timing
+Omy_RAD30619-61	Adaptive-Thermal Adaptation
+Omy_aspAT-123	Neutral
+Omy_RAD47955-51	Adaptive
+Omy_RAD12566-14	"Adaptive. Maximum Water Temperature. Basin-wide, top-outlier"
+Omy_aromat-280	Neutral
+Omy_ntl-27	Neutral
+Omy_txnip-343	Neutral
+OMS00132	Neutral
+Omy_RAD31408-67	"Adaptive. Basin-wide, top-outlier;  Stacks Locus ID is 31408_14"
+Omy_IL17-185	Neutral
+Omy_117815-81	Neutral
+OMS00079	Neutral
+OMS00149	Neutral
+Omy_RAD68634-40	"Adaptive. Maxiumum air temperature (warmest quarter). Basin-wide, temperature-related; "
+Omy_98683-165	Neutral
+Omy_RAD50632-21	"Adaptive. Basin-wide, top-outlier"
+Omy_96222-125	Neutral
+Omy_114315-438	Neutral
+Omy_102505-102	Neutral
+Omy_110362-585	Neutral
+Omy_LDHB-2_e5	Neutral
+Omy_zg57-91	Neutral
+OMS00062	Neutral
+Omy_97077-73	Neutral
+OMS00105	Neutral
+Omy_stat3-273	Neutral
+Omy_187760-385	Neutral
+OMS00156	Neutral
+OMS00111	Neutral
+Omy_anp-17	Neutral
+Omy_RAD29700-18	Neutral
+Omy_105075-162	Neutral
+OMS00134	Neutral
+Omy_RAD73963-73	"Adaptive. Basin-wide, top-outlier"
+Omy_mcsf-268	Neutral
+Omy_LDHB-1_i2	Neutral
+OMS00041	Neutral
+Omy_108007-193	Neutral
+Omy_u09-53.469	Neutral
+Omy_111383-51	Neutral
+Omy_RAD47444-53	Neutral
+Omy_RAD14033-46	"Adaptive. Maxiumum air temperature (warmest quarter). Basin-wide, top-outlier"
+Omy_RAD76570-62	"Adaptive. Minimum annual precipitation. Basin-wide, precipitation-related; "
+Omy_RAD25042-68	"Adaptive. Maximum annual air temperature. Basin-wide, top-outlier"
+Omy_RAD58835-15	Neutral
+Omy_RAD366-7	"Adaptive. Basin-wide, top-outlier"
+OMS00106	Neutral
+Omy_u09-54-311	Neutral
+OMS00121	Neutral
+Omy_117370-400	Neutral
+Omy_RAD26080-69	Neutral
+OMS00092	Neutral
+OMS00013	Neutral
+Omy_nach-200	Neutral
+Omy_RAD43573-37	"Adaptive. Basin-wide, top-outlier"
+OMS00015	Neutral
+Omy_cin-172	Neutral
+OMS00030	Neutral
+OMS00014	Neutral
+Omy_RAD3926-22	"Adaptive. Migration Distance to Ocean. Basin-wide, precipitation-related; "
+OMS00176	Neutral. Possible linkage
+Omy_rbm4b-203	Neutral
+OMS00143	Neutral
+Omy_OmyP9-180	Neutral
+OMS00070	Neutral
+Omy_gadd45-332	Neutral
+Omy_RAD35149-9	"Adaptive. Basin-wide, top-outlier"
+Omy_G3PD_2.246	Neutral
+M09AAE.082	Neutral
+Omy_RAD40641-58	"Adaptive. Maxiumum air temperature (warmest quarter). Basin-wide, top-outlier"
+Omy_RAD60135-12	"Adaptive. Migration Distance to Ocean. Basin-wide, top-outlier"
+Omy_118175-396	Neutral
+Omy_nkef-241	Neutral
+Omy_105385-406	Neutral
+Omy_118654-91	Neutral
+OMS00090	Neutral
+Omy_Il-1b_.028	Neutral
+Omy_RAD2976-26	"Adaptive. Basin-wide, top-outlier"
+OMS00179	Neutral
+OMS00053	Neutral
+Omy_cd59-206	Neutral
+Omy_RAD33122-47	"Adaptive. Basin-wide, top-outlier"
+OMS00112	Neutral
+OMS00061	Neutral
+Omy_RAD55404-54	"Adaptive. Minimum annual precipitation. Basin-wide, top-outlier"
+Omy_RAD4848-14	"Adaptive. Air and water temperature. Basin-wide, top-outlier"
+Omy_RAD92485-64	"Adaptive. Range of water temperature . Basin-wide, top-outlier"
+Omy_RAD7016-31	"Adaptive. Basin-wide, top-outlier"
+OMS00071	Neutral
+OMS00114	Neutral
+Omy_101832-195	Neutral
+Omy_RAD57916-29	"Adaptive. Basin-wide, top-outlier"
+OMS00118	Neutral
+Omy_tlr3-377	Neutral
+Omy_sys1-188	Neutral
+Omy_103705-558	Neutral
+Omy_RAD88122-32	Neutral
+Omy_RAD42793-59	Adaptive
+Omy_RAD48799-69	Neutral
+Omy_RAD78502-57	"Adaptive. Maxiumum air temperature (warmest quarter). Basin-wide, top-outlier"
+Omy_BAMBI2.312	Neutral
+OMS00006	Neutral
+Omy_G3PD_2-371	Neutral
+Omy_RAD3209-10	"Adaptive. Basin-wide, top-outlier"
+Omy_130524-160	Neutral
+OMS00058	Neutral
+Omy_RAD78147-27	"Adaptive. Maxiumum air temperature (warmest quarter). Basin-wide, top-outlier"
+Omy_116938-264	Neutral
+Omy_112301-202	Neutral
+OMS00039	Neutral
+Omy_RAD46314-35	Adaptive-Thermal Adaptation
+Omy_RAD73204-63	Adaptive
+Omy_RAD5374-56	"Adaptive. Minimum annual precipitation. Basin-wide, top-outlier"
+Omy_RAD88028-7	Adaptive
+Omy_RAD66402-36	"Adaptive. Natal Site annual precipitation. Basin-wide, top-outlier"
+Omy_RAD66834-17	Adaptive
+Omy_116733-349	Neutral
+Omy_star-206	Neutral
+Omy_RAD78776-10	"Adaptive. Maxiumum air temperature (warmest quarter). Basin-wide, temperature-related; "
+Omy_hsp47-86	Neutral
+Omy_99300-202	Neutral
+Omy_RAD24287-74	"Adaptive. Basin-wide, top-outlier"
+Omy_RAD13034-67	Adaptive-Thermal Adaptation
+Omy_RAD45104-18	Neutral
+Omy_sSOD-1	Neutral
+Omy_RAD59758-41	"Adaptive. Minimum annual precipitation. Basin-wide, precipitation-related; "
+Omy_RAD36952-53	"Adaptive. Maxiumum air temperature (warmest quarter). Basin-wide, temperature-related; "
+Omy_RAD65959-69	"Adaptive. Basin-wide, top-outlier"
+Omy_RAD38406-19	"Adaptive. Maxiumum air temperature (warmest quarter). Basin-wide, temperature-related"
+Omy_RAD2567-8	"Adaptive. Basin-wide, top-outlier"
+Omy_RAD23577-43	Adaptive
+Omy_RAD36848-7	Neutral
+Omy_arp-630	Neutral
+OMS00057	Neutral
+Omy_RAD9004-13	"Adaptive. Mean air temperature (driest quarter). Basin-wide, top-outlier"
+Omy_GREB1_05	Adaptive. Run timing
+Omy_RAD10733-10	"Adaptive. Air and water temperature. Basin-wide, top-outlier"
+Omy_128693-455	Neutral
+Omy_RAD55997-10	"Adaptive. Range of heat load index. Basin-wide, top-outlier"
+OMS00138	Neutral
+Omy_RAD52812-28	Neutral
+Omy_RAD86706-72	"Adaptive. Mean slope. Basin-wide, elevation-related"
+Omy_bcAKala-380rd	Neutral
+Omy_RAD72528-44	"Adaptive. Range of annual air temperature. Basin-wide, top-outlier"
+Omy_cd28-130	Neutral
+OMS00154	Neutral
+Omy_RAD59950-44	"Adaptive. Basin-wide, top-outlier"
+Omy_RAD3651-48	"Adaptive. Natal Site Diurnal Range. Basin-wide, top-outlier"
+Omy_RAD43612-42	Neutral
+Omy_RAD65808-68	"Adaptive. Mean precipitation (driest quarter). Basin-wide, top-outlier"
+Omy_RAD28236-38	"Adaptive. Migration Distance to Ocean. Basin-wide, migration-related"
+Omy_RAD16104-20	Adaptive
+Omy_RAD17849-16	"Adaptive. Basin-wide, top-outlier"
+Omy_RAD33798-24	"Adaptive. Minimum annual precipitation. Basin-wide, temperature-related; "
+Omy_RAD22123-69	"Adaptive. Migration Distance to Ocean. Basin-wide, top-outlier"
+Omy_RAD619-59	"Adaptive. Basin-wide, top-outlier"
+Omy_RAD98715-53	"Adaptive. Maxiumum air temperature (warmest quarter). Basin-wide, top-outlier"
+OmyR14589	Adaptive. Residency vs anadromy
+OmyR19198	Adaptive. Residency vs anadromy
+OmyR24370	Adaptive. Residency vs anadromy
+OmyR33562	Adaptive. Residency vs anadromy
+Omy_RAD24343-29	"Adaptive. Mean air temperature (wettest quarter). Basin-wide, temperature-related"
+Omy_RAD25907-57	"Adaptive. Basin-wide, top-outlier"
+Omy_Il1b-198	Neutral
+Omy_RAD31079-58	"Adaptive. Maximum annual air temperature. Basin-wide, top-outlier"
+Omy_aldB-165	Neutral
+Omy_colla1-525	Neutral
+Omy_RAD38269-10	Neutral
+Omy_RAD66218-58	Adaptive
+Omy_RAD10945-51	"Adaptive. Mean isothermality. Basin-wide, top-outlier"
+Omy_RAD30230-25	"Adaptive. Maxiumum air temperature (warmest quarter). Basin-wide, top-outlier"
+Omy_RAD45246-10	"Adaptive. Realted to energy expenditure. Basin-wide, migration-related; "
+Omy_RAD14269-30	"Adaptive. Basin-wide, top-outlier"

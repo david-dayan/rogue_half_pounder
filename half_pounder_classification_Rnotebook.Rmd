@@ -9,8 +9,273 @@ output:
     toc_collapsed: false
 ---
 
-# Rationale
+```{r, message=FALSE, warning=FALSE}
+require(tidyverse)
+require(DiagrammeR)
+require(poppr)
+```
+
+
+# Readme
+
+This is an rstudio project. If you'd like to pre-rendered figures, read a summary of analysis and view code, please open the html file in a browser. 
+
+
+To conduct the analyses on your computer, edit or run code: clone this repository into a directory on you r local machine and open the .Rproj file in Rstudio. All data and analyses are available in the github repository at https://github.com/david-dayan/rogue_half_pounder.git 
+
+# Rationale 
 
 ODFW has proposed using half pounder abundance as the sole index for determining sliding scale fishing regulations for winter steelhead on the Rogue as (i) half pounder abundance should integrate juvenile freshwater and early ocean conditions for steelhead regardless of whether they express the half pounder phenotype and (ii) half pounder abundance is predictive of winter steelhead abundance in historical dam passage counts. However, the relative proportion of winter vs summer run life histories expressed by half pounders is unknown.
 
-This study attempts to use neutral and adaptive GTseq markers used for  
+This study attempts to use neutral and adaptive GTseq markers used for population and life history assignment to classify half pounders into winter or summer run steelhead life histories.
+
+# Workflow and Data
+
+## Workflow Overview
+
+The initial analysis starts at filtered GTseq genotypes with 308 markers. Full analysis details conducted prior to this notebook (read filtering and genotype calling) are to come.  
+*Missing info* - filtering rules and genotype calling
+
+```{r}
+
+grViz("digraph flowchart {
+      # node definitions with substituted label text
+      node [fontname = Helvetica, shape = rectangle]        
+      tab1 [label = '@@1']
+      tab2 [label = '@@2']
+      tab3 [label = '@@3']
+      tab4 [label = '@@4']
+      tab5 [label = '@@5']
+      tab6 [label = '@@6']
+      tab7 [label = '@@7']
+      tab8 [label = '@@8']
+      # edge definitions with the node IDs
+      tab1 -> tab2
+      tab2 -> tab3
+      tab2 -> tab4
+      tab3 -> tab5
+      tab4 -> tab8
+      tab5 -> tab8
+      tab8 -> tab7
+      tab3 -> tab6
+      tab6 -> tab8
+      }
+      [1]: 'Raw Reads'
+      [2]: 'QC and Genotype Calling'
+      [3]: 'Filtered Reads - Adults, known winter/summer'
+      [4]: 'Filtered Reads - Half-Pounders'
+      [5]: 'LDA/DAPC'
+      [6]: 'Admixture'
+      [7]: 'Half Pounder Assignment'
+      [8]: 'Classifiers'
+      
+      ")
+```
+
+## Data Sources
+
+__Half Pounders__
+Samples were collected during ODFW’s Lower Rogue Seining Project in 2018 and 2019. The Lower Rogue Seining Project estimates escapement for Coho, late-run summer steelhead, half-pounder steelhead and fall chinook by beach seining near Huntley Park at approximate river mile 8, three times weekly from July through October. Half-pounder steelhead were identified as individuals with fork length 250 - 410mm and sampled in batches of up to 50 fish each day for 11 days from September 7th to October 1st 2018 totaling 363 individuals and 18 days from August 14th to September 25th 2019 totaling 334 individuals. Caudal fin clips were taken for DNA extraction, and placed in daily batch vials containing 95% ethanol
+
+The analysis contained in this notebook includes only the 2018 fish
+
+__Adults__  
+40 winter and 41 summer run fish colelcted from the Lower Rogue Seining Project in 2019  
+*Missing info* - how were these selected from among the 164 fish on the sample intake form, were all of these included in the GTseq run etc  
+
+Also have samples from (a) adult summer steelhead were sampled at the Cole River Hatchery sorting pond on 6/26/2019 and (b) adult winter steelhead were sampled at Cole Rivers Hatchery (Rogue River) and the Applegate River from adult brood stock for 2019, that have not been genotyped. 
+
+__Genotypes__  
+
+Input genotypes are in what appears to be a genalex format, lets get them into more flexible format for downstream analysis. 
+
+```{r, cache=TRUE}
+
+#cleaned up file: Omy_Rogue2018-19half-pounders-baseline_307snps_genotype-table.xlsx to comply with genealex format rules using regex and editing a few fields
+  #there are 308 SNPs not 307
+  # "." is not acceptable in column id for R, convert to "-"
+  # genealex is csv not xlsx, convert
+genclone <- read.genalex("genotype_data/prefiltered_genotypes.csv", ploidy =2)
+genind <- read.genalex("genotype_data/prefiltered_genotypes.csv", ploidy =2, genclone=FALSE)
+
+#now let's get pull the adults out for building a classifier
+adults <- genind[pop=c("Winter", "Summer")]
+half_pound <- genind[pop="halfpounder"]
+```
+
+# Classifiers
+
+We will build a few different classifiers for the half pounders using adults with known life histories
+
+*Choose additional classifiers*  
+DAPC - done  
+Some other options to consider:  
+* GSI_sim - can be use to implement GSI - don't know much about it  
+* Rubias - Bayesian inference in the conditional GSI model(Moran and Anderson)  
+* Pull out known run timing markers and take an ADMIXTURE/STRUCTURE like approach  
+* build best linear unbiased predictors/estimators (mlm/glm) (BLUPs)  
+* PLS-LDA - probably not worth it given it is fundamental the same as DAPC  
+
+
+## DAPC
+
+__Rationale__  
+The first classifier is DAPC. DAPC (applied in the adegenet package) is the discrimant analysis of principal components. DAPC maximizes the weighting of allele frequencies
+among principal components of genetic variation to describe differences among a priori assigned groupings.
+
+### Build Classifier
+
+__Check a priori assignments and assign genetic clusters__
+For the first step, will run successive k-means clustering after data transformation using PCA
+```{r, message=FALSE, warning=FALSE, echo=FALSE,results='hide',fig.keep='all'}
+#for this first step retain all pc, so set n.pca to greater than numner of possible pcs
+grp <- find.clusters(adults, max.n.clust=10, n.pca=310)
+```
+
+Nice, k-means on the data finds two clusters (based on BIC), now let's check to see if this fits with the assigned phenotypes of the adult fish.
+
+```{r}
+# it appears the best cluster number is 2 so move on
+grp <- find.clusters(adults, max.n.clust=10, n.pca=310, n.clust = 2)
+table(pop(adults), grp$grp)
+
+```
+
+K-means perfectly assigns genetic clusters to phenotypes!
+
+__Build the DAPC Classifier__  
+Now that we did a little quality control to confirm that clusters in the PCA transformed data conform to the assigned phenotypes, we will conduct our DAPC.
+
+First we run the dapc with all pcs retained to choose the number of pcs we need to retain info.
+
+```{r, cache=TRUE,  message=FALSE, warning=FALSE, echo=FALSE,results='hide',fig.keep='first'}
+dapc_adult <- dapc(adults, adults$pop, n.da = 1)
+#the PC can capture a lot of information, but because we have som e a priori knowledge about our dataset, namely that a handful of closely linked SNPs control the trait of interest and likely load onto the same PCs, we can set the n.pca very low
+```
+
+Seems like a small number of pcs is good, but let check how many are needed specifically for group assignment using the a-score (succesful reassignment probability after permuting group memberships)
+```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide', fig.keep='last'}
+#but just to check, lets run the a-score optimizer of adegenet
+invisible(dapc_highpc <- dapc(adults, adults$pop, n.cluster=2, n.pca = 50))
+optim.a.score(dapc_highpc, smart=FALSE)
+```
+
+This suggests that a single pc will adequately discriminate the groups without overfitting. Since we're not concerned about overfitting (applying the trained classifier to new data), we'll keep a few more than one PCs
+
+```{r, cache=TRUE, fig.cap="DAPC of winter and summer adults" }
+#optim a score is just 1 pc
+dapc_adult <- dapc(adults, adults$pop, n.pca = 5, n.da = 1)
+scatter.dapc(dapc_adult, legend=TRUE)
+```
+
+Here we can see the DAPC separates known run timings on the basis of a single discriminant axis based on 5PCs
+
+__Examine the loadings__  
+Yet another sanity check: Now we can check the loadings of SNPs on the PCs and DAs. Should return the known run history alleles. In addition to a sanity check this might be interesting to see if some chr28 SNPs are more informative than others for this population (Rogue)
+```{r}
+marker_loadings <- loadingplot(dapc_adult$var.contr, axis=1,thres=.01, lab.jitter=1)
+names(marker_loadings$var.values)
+```
+
+Now, lets check if these are labeled as adaptive/run timing SNPs in the metadata file for the GTseq markers
+
+```{r, warning=TRUE, message=FALSE}
+#opened the "Omy GTseq panel updated Jun-2020.xlsx" file and converted into format for reading into R (pulled just the "Assay" and "Presumed type")
+markersummary <- read_tsv("genotype_data/gtseq_marker_summary.txt")
+
+# adegenet saves the genotype value as part of the SNP name, after a ".", strip this off first
+clean_names <- str_remove_all(names(marker_loadings$var.values), ".[0-9]$")
+
+markersummary[(markersummary$Assay %in% clean_names),]
+
+
+```
+*missing info* some of the marker names in the gtseq data are not in the marker summary spreadsheet I received, find the correct version 
+
+So far, only 4 of the 11 sites with high loading have matches in the gtseq summary file, but yes, all are annotated as run-time related
+
+### Classification
+
+Now that we have a classifier, we'll apply to to the half pounders.
+
+```{r, warning=FALSE, message=FALSE, cache=TRUE, fig.show='hold', out.width="48%"}
+pred.half<- predict.dapc(dapc_adult, newdata=half_pound)
+
+# now lets get the individual data into a single df and plot 
+ind.scores_adult <- as.data.frame(cbind(dapc_adult$ind.coord, as.character(dapc_adult$grp)))
+ind.scores_half <- as.data.frame(cbind(pred.half$ind.scores, rep("halfpounder", times=length(pred.half$ind.scores))))
+ind.scores <- bind_rows(ind.scores_adult, ind.scores_half)
+ind.scores$LD1 <- as.numeric(ind.scores$LD1) #this is why you always use tidyR for datawrangling...
+
+#now lets 
+
+#plot
+ggplot(data=ind.scores)+geom_density(aes(LD1, fill=V2, color=V2), alpha = 0.2)+scale_color_viridis_d()+scale_fill_viridis_d()+theme_classic()
+
+ggplot(data=ind.scores)+geom_histogram(aes(LD1, fill=V2, color=V2), alpha = 0.2)+scale_color_viridis_d()+scale_fill_viridis_d()+theme_classic()
+
+```
+
+
+__A single PC__  
+Since assignment success of randomized groups was actually maximized ith a single pc summarizing differences among run types (see a-score analysis above). Let repeat the analysis with a single PC to see if we can improve assignment.
+
+```{r, cache=T, message=FALSE, warning=FALSE, fig.show='hold', out.width="48%"}
+dapc_1pc <- dapc(adults, n.pca = 1, n.da=1)
+
+pred.half.1pc<- predict.dapc(dapc_1pc, newdata=half_pound)
+
+# now lets get the individual data into a single df and plot 
+ind.scores_adult1 <- as.data.frame(cbind(dapc_1pc$ind.coord, as.character(dapc_1pc$grp)))
+ind.scores_half1 <- as.data.frame(cbind(pred.half.1pc$ind.scores, rep("halfpounder", times=length(pred.half.1pc$ind.scores))))
+ind.scores1 <- bind_rows(ind.scores_adult1, ind.scores_half1)
+ind.scores1$LD1 <- as.numeric(ind.scores1$LD1) #this is why you always use tidyR for datawrangling...
+
+#now lets 
+
+#plot
+ggplot(data=ind.scores1)+geom_density(aes(LD1, fill=V2, color=V2), alpha = 0.2)+scale_color_viridis_d()+scale_fill_viridis_d()+theme_classic()
+
+ggplot(data=ind.scores1)+geom_histogram(aes(LD1, fill=V2, color=V2), alpha = 0.2)+scale_color_viridis_d()+scale_fill_viridis_d()+theme_classic()
+
+```
+
+About the same.
+
+
+__Rough Results Summary__
+
+Half pounders can not be reliably discriminated into winter or summer run timing on the basis of SNPs in the GTseq panel. They (loosely) fall into three groups: winter, summer and intermediate.  
+
+__Formal Assignment__  
+Given the distribution of known run timing individuals along the discriminant axis, we'll (arbitrarily) define assignment of half pounders into run types as fish that fall into 95% credible intervals of known winter/summer fish
+
+```{r}
+CIs <- ind.scores %>%
+  group_by(V2) %>%
+  summarise(loCI = quantile(LD1, probs = 0.025),
+            hiCI = quantile(LD1, probs = 0.975))
+
+#number of half pounders that fall in the 95% credible interval for winter fish assignment
+ind.scores %>%
+  filter(V2 == "halfpounder") %>%
+  summarise(winter_assigned = sum((LD1 < CIs$hiCI[3] & LD1 > CIs$loCI[3])), summer_assigned = sum((LD1 < CIs$hiCI[2] & LD1 > CIs$loCI[2])), unassigned = sum((LD1 < CIs$loCI[3] & LD1 > CIs$hiCI[2])) )
+
+```
+
+We should also see if using a single PC improves assignment:
+
+```{r}
+CIs1 <- ind.scores1 %>%
+  group_by(V2) %>%
+  summarise(loCI = quantile(LD1, probs = 0.025),
+            hiCI = quantile(LD1, probs = 0.975))
+
+#number of half pounders that fall in the 95% credible interval for winter fish assignment
+ind.scores1 %>%
+  filter(V2 == "halfpounder") %>%
+  summarise(winter_assigned = sum((LD1 < CIs1$hiCI[3] & LD1 > CIs1$loCI[3])), summer_assigned = sum((LD1 < CIs1$hiCI[2] & LD1 > CIs1$loCI[2])), unassigned = sum((LD1 < CIs1$loCI[3] & LD1 > CIs1$hiCI[2])) )
+
+```
+
+Yes a single PC is more inclusive when assigning individuals to groups
