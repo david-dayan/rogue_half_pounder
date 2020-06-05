@@ -1,0 +1,16 @@
+---
+title: "Half Pounder Classification Notebook"
+output:
+  html_document:
+    df_print: paged
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_collapsed: false
+---
+
+# Rationale
+
+ODFW has proposed using half pounder abundance as the sole index for determining sliding scale fishing regulations for winter steelhead on the Rogue as (i) half pounder abundance should integrate juvenile freshwater and early ocean conditions for steelhead regardless of whether they express the half pounder phenotype and (ii) half pounder abundance is predictive of winter steelhead abundance in historical dam passage counts. However, the relative proportion of winter vs summer run life histories expressed by half pounders is unknown.
+
+This study attempts to use neutral and adaptive GTseq markers used for  
