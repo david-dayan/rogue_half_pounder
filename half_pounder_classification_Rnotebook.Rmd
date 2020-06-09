@@ -13,6 +13,8 @@ output:
 require(tidyverse)
 require(DiagrammeR)
 require(poppr)
+require(genepop)
+require(graph4lg)
 ```
 
 
@@ -25,7 +27,7 @@ To conduct the analyses on your computer, edit or run code: clone this repositor
 
 # Rationale 
 
-ODFW has proposed using half pounder abundance as the sole index for determining sliding scale fishing regulations for winter steelhead on the Rogue as (i) half pounder abundance should integrate juvenile freshwater and early ocean conditions for steelhead regardless of whether they express the half pounder phenotype and (ii) half pounder abundance is predictive of winter steelhead abundance in historical dam passage counts. However, the relative proportion of winter vs summer run life histories expressed by half pounders is unknown.
+ODFW has proposed using half pounder abundance as the sole index for determining sliding scale fishing regulations for winter steelhead on the Rogue as (i) half pounder abundance should integrate juvenile freshwater and early ocean conditions for steelhead regardless of whether they express the half pounder phenotype and (ii) half pounder abundance is predictive of steelhead abundance in historical dam passage counts. However, the relative proportion of winter vs summer run life histories expressed by half pounders is unknown.
 
 This study attempts to use neutral and adaptive GTseq markers used for population and life history assignment to classify half pounders into winter or summer run steelhead life histories.
 
@@ -80,7 +82,7 @@ Samples were collected during ODFW’s Lower Rogue Seining Project in 2018 and 2
 The analysis contained in this notebook includes only the 2018 fish
 
 __Adults__  
-40 winter and 41 summer run fish colelcted from the Lower Rogue Seining Project in 2019  
+40 winter and 41 summer run fish colelcted from the Lower Rogue Seining Project in 2018  
 *Missing info* - how were these selected from among the 164 fish on the sample intake form, were all of these included in the GTseq run etc  
 
 Also have samples from (a) adult summer steelhead were sampled at the Cole River Hatchery sorting pond on 6/26/2019 and (b) adult winter steelhead were sampled at Cole Rivers Hatchery (Rogue River) and the Applegate River from adult brood stock for 2019, that have not been genotyped. 
@@ -279,3 +281,59 @@ ind.scores1 %>%
 ```
 
 Yes a single PC is more inclusive when assigning individuals to groups
+
+# Run Timing Loci
+
+Let's take a closer look at the loci underlying the classification and ask:  
+(1) Do half pounders that fail to classify into run timing groups do so because they are largely hets, or is it the "discordant" GTs, i.e. breakup of the run timing haplotype?  
+    * estimate heterozygosity
+    * LD decay rates genome wide (might be hard with 308 SNPs...) vs within grep1 region for adults vs half pounders 
+    
+## Heterozygosity
+
+First, let's look at overall heterozygosity (note/caution: GTseq loci are not random sample of the genome)
+
+```{r}
+# let's try to get this all done with adegenet get away without another file conversion step
+n.pop <- seppop(genind) 
+
+#get observed het at all sites in the panel
+hobs <- lapply(n.pop, function(x) (summary(x)$Hobs))
+hobs <- as.data.frame(t(do.call(rbind, hobs)))
+hobs <- gather(hobs, "pop", "hobs")
+ggplot(hobs)+geom_boxplot(aes(x=pop, y=hobs))+theme_classic()+xlab("Run Timing")+ylab("Observed Heterozygosity")
+  
+```
+
+No differences in heterozygosity overall, but what about at run timing SNPs
+
+```{r}
+#what about at the SNPs associated with run timing
+#first get the good markers from the dapc with 1pc
+marker_loadings <- loadingplot(dapc_1pc$var.contr, axis=1,thres=.01, lab.jitter=1)
+run_timing_genind <- genind[,marker_loadings$var.idx]
+
+# let's try to get this all done with adegenet get away without another file conversion step
+n.pop.run <- seppop(run_timing_genind) 
+
+#get observed het at all sites in the panel
+hobs.run <- lapply(n.pop.run, function(x) (summary(x)$Hobs))
+hobs.run <- as.data.frame(t(do.call(rbind, hobs.run)))
+hobs.run <- gather(hobs.run, "pop", "hobs")
+ggplot(hobs.run)+geom_boxplot(aes(x=pop, y=hobs))+theme_classic()+xlab("Run Timing")+ylab("Observed Heterozygosity")
+```
+
+Half pounders are highly heterozygous at run timing SNPs
+
+## LD
+Lets explore the genotypes of the half pounders at the run timing loci more. Are they just heterozygous at all loci or do they demonstrate "discordant" genotypes (i.e. the run timingi haplotype is broken up)
+
+```{r}
+# convert to format for genepop which well use to calculate r2
+genind_to_genepop(run_timing_genind, "./genotype_data/runloci.txt")
+test_LD("./genotype_data/runloci.txt", outputFile = "./ld/runloci_ld.txt")
+
+
+```
+
+
