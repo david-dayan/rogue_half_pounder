@@ -76,7 +76,7 @@ grViz("digraph flowchart {
 
 ## Data Sources
 
-__Half Pounders__
+__Half Pounders__  
 Samples were collected during ODFW’s Lower Rogue Seining Project in 2018 and 2019. The Lower Rogue Seining Project estimates escapement for Coho, late-run summer steelhead, half-pounder steelhead and fall chinook by beach seining near Huntley Park at approximate river mile 8, three times weekly from July through October. Half-pounder steelhead were identified as individuals with fork length 250 - 410mm and sampled in batches of up to 50 fish each day for 11 days from September 7th to October 1st 2018 totaling 363 individuals and 18 days from August 14th to September 25th 2019 totaling 334 individuals. Caudal fin clips were taken for DNA extraction, and placed in daily batch vials containing 95% ethanol
 
 The analysis contained in this notebook includes only the 2018 fish
@@ -127,7 +127,7 @@ among principal components of genetic variation to describe differences among a 
 
 ### Build Classifier
 
-__Check a priori assignments and assign genetic clusters__
+__Check a priori assignments and assign genetic clusters__  
 For the first step, will run successive k-means clustering after data transformation using PCA
 ```{r, message=FALSE, warning=FALSE, echo=FALSE,results='hide',fig.keep='all'}
 #for this first step retain all pc, so set n.pca to greater than numner of possible pcs
@@ -207,7 +207,7 @@ pred.half<- predict.dapc(dapc_adult, newdata=half_pound)
 ind.scores_adult <- as.data.frame(cbind(dapc_adult$ind.coord, as.character(dapc_adult$grp)))
 ind.scores_half <- as.data.frame(cbind(pred.half$ind.scores, rep("halfpounder", times=length(pred.half$ind.scores))))
 ind.scores <- bind_rows(ind.scores_adult, ind.scores_half)
-ind.scores$LD1 <- as.numeric(ind.scores$LD1) #this is why you always use tidyR for datawrangling...
+ind.scores$LD1 <- as.numeric(levels(ind.scores$LD1))[ind.scores$LD1] #this is why you always use tidyR for datawrangling...
 
 #now lets 
 
@@ -231,7 +231,7 @@ pred.half.1pc<- predict.dapc(dapc_1pc, newdata=half_pound)
 ind.scores_adult1 <- as.data.frame(cbind(dapc_1pc$ind.coord, as.character(dapc_1pc$grp)))
 ind.scores_half1 <- as.data.frame(cbind(pred.half.1pc$ind.scores, rep("halfpounder", times=length(pred.half.1pc$ind.scores))))
 ind.scores1 <- bind_rows(ind.scores_adult1, ind.scores_half1)
-ind.scores1$LD1 <- as.numeric(ind.scores1$LD1) #this is why you always use tidyR for datawrangling...
+ind.scores1$LD1 <- as.numeric(levels(ind.scores1$LD1))[ind.scores1$LD1] #this is why you always use tidyR for datawrangling...
 
 #now lets 
 
@@ -261,7 +261,7 @@ CIs <- ind.scores %>%
 #number of half pounders that fall in the 95% credible interval for winter fish assignment
 ind.scores %>%
   filter(V2 == "halfpounder") %>%
-  summarise(winter_assigned = sum((LD1 < CIs$hiCI[3] & LD1 > CIs$loCI[3])), summer_assigned = sum((LD1 < CIs$hiCI[2] & LD1 > CIs$loCI[2])), unassigned = sum((LD1 < CIs$loCI[3] & LD1 > CIs$hiCI[2])) )
+  summarise(winter_assigned = sum((LD1 < CIs$hiCI[2] & LD1 > CIs$loCI[2])), summer_assigned = sum((LD1 < CIs$hiCI[1] & LD1 > CIs$loCI[1])), unassigned = sum((LD1 < CIs$loCI[2] & LD1 > CIs$hiCI[1])) )
 
 ```
 
@@ -276,7 +276,7 @@ CIs1 <- ind.scores1 %>%
 #number of half pounders that fall in the 95% credible interval for winter fish assignment
 ind.scores1 %>%
   filter(V2 == "halfpounder") %>%
-  summarise(winter_assigned = sum((LD1 < CIs1$hiCI[3] & LD1 > CIs1$loCI[3])), summer_assigned = sum((LD1 < CIs1$hiCI[2] & LD1 > CIs1$loCI[2])), unassigned = sum((LD1 < CIs1$loCI[3] & LD1 > CIs1$hiCI[2])) )
+  summarise(winter_assigned = sum((LD1 < CIs1$hiCI[2] & LD1 > CIs1$loCI[2])), summer_assigned = sum((LD1 < CIs1$hiCI[1] & LD1 > CIs1$loCI[1])), unassigned = sum((LD1 < CIs1$loCI[2] & LD1 > CIs1$hiCI[1])) )
 
 ```
 
@@ -340,3 +340,18 @@ poppr::pair.ia(run_timing_genind_half, limits=c(0,1))
 ```
 
 Yes, in the adults the Chr28 run timing loci are highly linked and likely co-inherited as a single haploype, whereas the half pounder Chr28 loci are broken up
+
+# Structure Within Halfpounders
+
+```{r}
+clust <- find.clusters(half_pound, n.pca = 40, n.clust = 4) #four clusters using BIC for 40pcs
+dapc_half <- dapc(half_pound, pop = clust$grp, n.pca = 40, n.da = 3)
+scatter.dapc(dapc_half)
+markersummary_half <- loadingplot(dapc_half$var.contr, threshold = 0.01, axis = 1)
+uniq_structure <- markersummary_half$var.names[!(markersummary_half$var.names %in% marker_loadings$var.names)]
+uniq_structure
+
+```
+DAPC on half pounders finds 4 clusters driven by 16 markers, including the 11 markers that capture variation between adult run timing groups as well as 5 additional:  
+* 4 OmyR... annotated as "Adaptive. Residency vs anadromy" on Chr5  
+* Omy_bcAKala... annotated as neutral from the PBT panel
