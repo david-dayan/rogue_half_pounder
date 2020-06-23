@@ -282,6 +282,23 @@ ind.scores1 %>%
 
 Yes a single PC is more inclusive when assigning individuals to groups
 
+### Arrival Timing of Half-Pounders
+
+Is there a releationship between run-timing loci in the half-pounders and there collection date at Huntley Park?
+```{r, warning=FALSE, message=FALSE }
+half_dates <- read_tsv("metadata/half_pounder_dates.txt")
+half_dates$Date <- as.Date(half_dates$Date, format = "%m/%d/%Y")
+ind.scores1_half <- ind.scores1 %>%
+  filter(V2=="halfpounder") %>%
+  rownames_to_column(var = "ID") %>%
+  left_join(half_dates, by=c("ID"))
+
+ggplot(ind.scores1_half)+geom_point(aes(Date, LD1))+theme_classic()+geom_smooth(aes(Date, LD1), method = lm)
+summary(aov(data=ind.scores1_half, LD1~Date))
+```
+
+
+
 # Run Timing Loci
 
 Let's take a closer look at the loci underlying the classification and ask:  
