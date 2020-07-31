@@ -1,0 +1,8 @@
+load("/Users/ddayan/FRA/premature_migration/Rogue_Half-Pounder/rogue_half_pounder_repo/workspace.RData")
+env()
+ls()
+genind
+library(adegenet)
+genind
+save(genind, "genotype_data/genind.R")
+save(genind, file ="genotype_data/genind.R")

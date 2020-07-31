@@ -1,0 +1,473 @@
+---
+title: "Half Pounder Genotyping Notebook"
+output:
+  html_document:
+    df_print: paged
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_collapsed: false
+---
+
+```{r, message=FALSE, warning=FALSE}
+require(tidyverse)
+require(DiagrammeR)
+require(poppr)
+require(genepop)
+require(graph4lg)
+```
+
+
+# Readme
+
+This is an rstudio project. If you'd like to pre-rendered figures, read a summary of analysis and view code, please open the relevant html file in a browser. 
+
+
+To conduct the analyses on your computer, edit or run code: clone this repository into a directory on you r local machine and open the .Rproj file in Rstudio. All data (except raw sequencing data) and analyses are available in the github repository at https://github.com/david-dayan/rogue_half_pounder.git 
+
+# Rationale 
+
+ODFW has proposed using half pounder abundance as the sole index for determining sliding scale fishing regulations for winter steelhead on the Rogue as (i) half pounder abundance should integrate juvenile freshwater and early ocean conditions for steelhead regardless of whether they express the half pounder phenotype and (ii) half pounder abundance is predictive of steelhead abundance in historical dam passage counts. However, the relative proportion of winter vs summer run life histories expressed by half pounders is unknown.
+
+This study attempts to use neutral and adaptive GTseq markers used for population and life history assignment to classify half pounders into winter or summer run steelhead life histories.
+
+This notebook covers genotyping (bioinformatic from raw sequencing reads to called genotypes) Rogue River summer fall winter and half pounder steelhead collected in 2018 and 2019. 
+
+# GTseq outline
+
+```{r}
+grViz("digraph flowchart {
+      # node definitions with substituted label text
+      node [fontname = Helvetica, shape = rectangle]        
+      tab1 [label = '@@1']
+      tab2 [label = '@@2']
+      tab3 [label = '@@3']
+      tab4 [label = '@@4']
+      tab5 [label = '@@5']
+      tab6 [label = '@@6']
+      tab7 [label = '@@7']
+      tab8 [label = '@@8']
+      # edge definitions with the node IDs
+      tab1 -> tab2 [label = 'GTseq_BarcodeSplit']
+      tab2 -> tab3 [label = 'GTseq_Genotyper']
+      tab3 -> tab4 [label = 'GTseq_genocompile']
+      tab4 -> tab5 [label = 'filtering']
+      tab4 -> tab6 [label = 'GTseq_summaryfigs']
+      tab3 -> tab7 [label = 'GTseq_genocompilecounts']
+      tab7 -> tab5 
+      tab1 -> tab8 [label = 'GTseq_seqtest']
+      tab7 -> tab4 [label = 'GTseq_Omysex']
+      tab6 -> tab5
+      }
+      [1]: 'Raw Reads'
+      [2]: 'Demultiplezed fastqs'
+      [3]: 'Individual genotypes'
+      [4]: 'raw GTseq dataset'
+      [5]: 'final filtered dataset'
+      [6]: 'summary figures'
+      [7]: 'read counts'
+      [8]: 'marker info'
+      
+      ")
+
+```
+
+# Data Summary
+
+## Samples
+
+__Half Pounders__  
+Samples were collected during ODFW’s Lower Rogue Seining Project in 2018 and 2019. The Lower Rogue Seining Project estimates escapement for Coho, late-run summer steelhead, half-pounder steelhead and fall chinook by beach seining near Huntley Park at approximate river mile 8, three times weekly from July through October. Half-pounder steelhead were identified as individuals with fork length 250 - 410mm and sampled in batches of up to 50 fish each day for 11 days from September 7th to October 1st 2018 totaling 384 individuals and 18 days from August 14th to September 25th 2019 totaling 331 individuals. Caudal fin clips were taken for DNA extraction, and placed in daily batch vials containing 95% ethanol. Note that due to batch collection of fin clips, that these numbers are inflated (some individuals have multiple tissue samples - identified later and filtered) 
+
+Also ~5% of samples represented twice in GTseq library as QAQC samples
+
+__Adults__  
+45 winter and 45 early run summer run fish.. Adult summer steelhead were sampled at the Cole River Hatchery sorting pond on 6/26/2019 and (b) adult winter steelhead were sampled at Cole Rivers Hatchery (Rogue River) and the Applegate River from adult brood stock for 2019. Finally 166 additional late-run summer fish (fall run) were sampled at the Huntley Park seine on the lower Rogue.
+
+
+__Sample metadata__
+
+let's gather all the metadata into a single file:
+note that intake files disagrees with other sample sizes - likely because some samples came as batch jars of fin clips, and some fin clips were from the same individual and later filtered out
+```{r, message=FALSE, warning=FALSE}
+#intake files
+half_2018_intake <- readxl::read_xlsx("../meta_data/2018_halfpounder/OmyJC18ROGR_STHP Intake form Spread sheet.xlsx", sheet = 3)
+half_2019_intake <- readxl::read_xlsx("../meta_data/2019_halfpounder/STHP Intake form Spread sheet 2019.xlsx", sheet = 1)
+fall_intake <- readxl::read_xlsx("../meta_data/2019_fall/Rogue Adult Summer and Winter (06 11 20).xlsx", sheet = 1)
+summer_intake <- readxl::read_xlsx("../meta_data/2019_summer/Omy Rogue2019 steelhead datasheets.xlsx", sheet = 2)
+winter_intake <- readxl::read_xlsx("../meta_data/2019_winter/StW Scales for DNA (06 17 19).xlsx", sheet = 3)
+
+#merge intakes
+# first clean them up a bit to make merging easier
+half_2018_intake <- half_2018_intake[,c(1,6)]
+colnames(half_2018_intake)[1] <- "ID"
+half_2018_intake$run <- "halfpounder"
+half_2018_intake$year <- "2018"
+colnames(half_2018_intake) <- c("ID", "Date", "run", "year")
+
+half_2019_intake <- half_2019_intake[,c(1,2)]
+half_2019_intake$run <- "halfpounder"
+half_2019_intake$year <- "2019"
+colnames(half_2019_intake) <- c("ID", "Date", "run", "year")
+
+summer_intake <- summer_intake[,c(2,3,6)]
+colnames(summer_intake) <- c("ID", "Date", "run")
+summer_intake$year <- "2019"
+
+winter_intake <- winter_intake[,c(2,3,7)]
+colnames(winter_intake) <- c("ID", "Date", "run")
+winter_intake$year <- "2019"
+
+fall_intake <- subset(fall_intake, Run == "Summer")
+fall_intake <- fall_intake[,c(1,3,6)]
+colnames(fall_intake) <- c("ID", "Date", "run")
+fall_intake$run <- "fall"
+fall_intake$year <- "2019"
+
+meta_data <- bind_rows(half_2018_intake, half_2019_intake, fall_intake, winter_intake, summer_intake)
+
+meta_data %>%
+  group_by(run, year) %>%
+  tally()
+
+```
+
+## Sequencing QC Reports
+
+__second lane__  
+Clusters: 409,149,535  
+Yield (mbase): 61,782  
+% >Q30 bases: 87.13  
+Average Qual: 37.18  
+
+fastqc report available in working directory
+
+__first lane__  
+don't have this info
+
+## data locations
+
+Sequencing data is from multiple sequencing runs and multiple technicians/bioinformaticians. Summer Winter and 2018 half-pounders are already 
+
+__Demultiplexed fastqs__  
+/nfs1/FW_HMSC/OMalley_Lab/bohns/GTseq/OmyRogue/sample_fastqs - 2018 halfpounders
+/nfs1/FW_HMSC/OMalley_Lab/bohns/GTseq/OmyRogue/baseline/sample_fastqs - 2019 winter and 2019 summer
+
+/dfs/FW_HMSC/Omalley_Lab/dayan/half_pounder/genotyping/demux - 2019 fall and 2019 halfpounder
+
+
+__Lane 1__  
+This project uses data from two GTseq libraries. One sequenced in 2019 and a second in July 2020. Need to find this info for the first lane
+
+__Lane 2__  
+/dfs/FW_HMSC/Omalley_Lab/dayan/seqdata/OmyRogue2020/Undetermined_S0_L002_R1_001.fastq.gz
+GTseq runs on uncompressed files, uncompressed copy in same directory "lane2.fastq"
+
+
+# Demultiplex
+
+The first step is to demultiplex the raw sequencing file using the i5 and i7 indexes. We can actually skip this because the sequencing center already performed a demux (exact matching) for the second lane, and files are already demuxed for the first lane. Instead, we just copy the demuxed files and give them more reasonable name.  
+
+
+```{r, eval=FALSE}
+#generate barcode file for second lane samples
+# example: Sample,PlateID,i7_name,i7_sequence,i5_name,i5_sequence
+#          Sample123,P1234,i001,ACCGTA,25,CCCTAA
+#          Sample321,P1234,i001,ACCGTA,26,GGCACA
+
+#first lets get the index sequences 
+index2020 <- read_tsv("metadata/index_2020.txt")
+colnames(index2020) <- c("Sample","PlateID","i7_name","i7_sequence","i5_name","i5_sequence")
+write_csv(index2020, "./metadata/index_2020_lane.csv")
+```
+
+```{bash, eval=FALSE}
+#first move the demuxed files over
+cp /nfs2/hts/illumina/200723_J00107_0245_AHHLG2BBXY_1504/L23/*Omy* /dfs/FW_HMSC/Omalley_Lab/dayan/half_pounder/genotyping/demux
+
+cp /nfs2/hts/illumina/200723_J00107_0245_AHHLG2BBXY_1504/L23/*positive* /dfs/FW_HMSC/Omalley_Lab/dayan/half_pounder/genotyping/demux
+
+cp /nfs2/hts/illumina/200723_J00107_0245_AHHLG2BBXY_1504/L23/negative* /dfs/FW_HMSC/Omalley_Lab/dayan/half_pounder/genotyping/demux
+
+#next rename to something easier to work with
+for file in ./*
+do
+   mv "$file" "${file:20}"
+done
+
+
+for file in ./*fastq.genos
+do
+   mv "$file" "${file%..genos}".genos
+done
+```
+
+
+# Genotype
+
+Here we run an array job to generate .genos files from demuxed fastqs, running 20 files in parallel at a time.
+
+First let's decompress all the files from the latest run
+```{bash, eval=FALSE}
+
+#!/bin/bash
+#$ -S /bin/bash
+
+#$ -t 1-554
+
+#$ -tc 20
+
+#$ -N decompress
+
+#$ -cwd
+
+#$ -o $JOB_NAME_$TASK_ID.out
+
+#$ -e $JOB_NAME_$TASK_ID.err
+
+FASTQS=(`ls *fastq.gz`)
+INFILE=${FASTQS[$SGE_TASK_ID -1]}
+
+gunzip -c $INFILE > ${INFILE%.gz}
+
+#save as script and submit this with qsub -q harold scriptname
+```
+
+Also need to do the same for other fastqs: first we'll decompress the 2018 half pounders and move them to a local directory (demux/halfpound_2018)
+
+```{bash, eval=FALSE}
+
+#!/bin/bash
+#$ -S /bin/bash
+
+#$ -t 1-554
+
+#$ -tc 20
+
+#$ -N decompress
+
+#$ -cwd
+
+#$ -o $JOB_NAME_$TASK_ID.out
+
+#$ -e $JOB_NAME_$TASK_ID.err
+
+FASTQS=(`##########`)
+INFILE=${FASTQS[$SGE_TASK_ID -1]}
+
+gunzip -c $INFILE > ${INFILE%.gz}
+
+#save as script and submit this with qsub -q harold scriptname
+```
+
+
+
+Next we'll run the GTseq genotyper (v3) script on each fastq file to generate the individual level .genos outputs. This is run for the new data as well as the old. Each set is run as a separate array job. The probe_seq file is full the full 390 SNP panel with allele correction values from CRITFC.
+
+First set the perl environment
+```{bash, eval=FALSE}
+#installed String::Approx (copied tar.gz and followed install in the readme)
+
+setenv PERL5LIB ~/perl5/lib/perl5/x86_64-linux-thread-multi/ #for tcsh
+export PERL5LIB='/home/fw/dayand/perl5/lib/perl5/x86_64-linux-thread-multi/' # for bash
+
+#note i've been running in bash so neet to set the environmental variables a little differently
+```
+
+then run the genotyper
+first the lane2 data
+```{bash, eval=FALSE}
+
+#!/bin/bash
+#$ -S /bin/bash
+
+#$ -t 1-554
+
+#$ -tc 20
+
+#$ -N GTseq-genotyperv3
+
+#$ -cwd
+
+#$ -o $JOB_NAME_$TASK_ID.out
+
+#$ -e $JOB_NAME_$TASK_ID.err
+export PERL5LIB='/home/fw/dayand/perl5/lib/perl5/x86_64-linux-thread-multi/'
+
+FASTQS=(`ls /dfs/FW_HMSC/Omalley_Lab/dayan/half_pounder/genotyping/demux/*fastq`)
+INFILE=${FASTQS[$SGE_TASK_ID -1]}
+OUTFILE=$(basename ${INFILE%.fastq.gz}.genos)
+
+GTSEQ_GENO="/dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/GTseq_Genotyper_v3.pl
+"
+
+PROBE_SEQS="/dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/Omy_GTseq390_ProbeSeqs.csv"
+
+perl $GTSEQ_GENO $PROBE_SEQS $INFILE > $OUTFILE
+
+#save as script and submit this with qsub -q harold scriptname in the ./genos/ dir
+```
+
+then the 2018 halfpounders
+```{bash, eval=FALSE}
+
+#!/bin/bash
+#$ -S /bin/bash
+
+#$ -t 1-407
+
+#$ -tc 10
+
+#$ -N GTseq-genotyperv3
+
+#$ -cwd
+
+#$ -o $JOB_NAME_$TASK_ID.out
+
+#$ -e $JOB_NAME_$TASK_ID.err
+
+#get the 2018 halfpounders
+export PERL5LIB='/home/fw/dayand/perl5/lib/perl5/x86_64-linux-thread-multi/'
+
+
+FASTQS=(`ls /dfs/FW_HMSC/Omalley_Lab/dayan/half_pounder/genotyping/demux/halfpound_2018/*fastq`)
+INFILE=${FASTQS[$SGE_TASK_ID -1]}
+
+GTSEQ_GENO="/dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/GTseq_Genotyper_v3.pl
+"
+
+OUTFILE=$(basename ${INFILE%.fastq}.genos)
+
+PROBE_SEQS="/dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/Omy_GTseq390_ProbeSeqs.csv"
+
+perl $GTSEQ_GENO $PROBE_SEQS $INFILE > $OUTFILE
+
+#save as script and submit this with qsub -q harold scriptname
+```
+
+
+```{bash, eval=FALSE}
+
+#!/bin/bash
+#$ -S /bin/bash
+
+#$ -t 1-96
+
+#$ -tc 10
+
+#$ -N GTseq-genotyperv3
+
+#$ -cwd
+
+#$ -o $JOB_NAME_$TASK_ID.out
+
+#$ -e $JOB_NAME_$TASK_ID.err
+
+#get the 2018 summer and winter
+FASTQS=(`ls /nfs1/FW_HMSC/OMalley_Lab/bohns/GTseq/OmyRogue/baseline/sample_fastqs/*fastq`)
+INFILE=${FASTQS[$SGE_TASK_ID -1]}
+
+GTSEQ_GENO="/dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/GTseq_Genotyper_v3.pl
+"
+
+OUTFILE=$(basename ${INFILE%fastq}.genos)
+
+PROBE_SEQS="/dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/Omy_GTseq390_ProbeSeqs.csv"
+
+perl $GTSEQ_GENO $PROBE_SEQS $INFILE > $OUTFILE
+
+#save as script and submit this with qsub -q harold scriptname
+```
+
+After the genos are written for the panel, we add the sex genotyper
+```{bash, eval =FALSE}
+#the omysex script is hardcoded to require the fastqs and genos to all be in a single collective directory ... 
+#rather than try to fix this hardcoding in the script, I just coped with it and temporarily copied all the fastqs into the .genos driectory then deleted them after i was done
+
+cp /nfs1/FW_HMSC/OMalley_Lab/bohns/GTseq/OmyRogue/baseline/sample_fastqs/*fastq ./
+cp /dfs/FW_HMSC/Omalley_Lab/dayan/half_pounder/genotyping/demux/halfpound_2018/*fastq ./
+cp /dfs/FW_HMSC/Omalley_Lab/dayan/half_pounder/genotyping/demux/*fastq ./
+
+#oops it seems like the omysex script doesn't like the naming convention I used lets rename
+for file in ./*fastq.genos
+do
+   mv "$file" "${file%.fastq.genos}".genos
+done
+
+#below is the script to run the omysex script
+
+SGE_Batch -q harold -r omysex -c 'perl /dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/OmySEX_test_v3.pl'
+
+# don't forget to remove these dups when done
+
+
+```
+
+After all the .genos are written we compile them into a single output using the GenoCompile script
+
+```{bash, eval=FALSE}
+
+#this is run from within the .genos directory
+
+SGE_Batch -q harold -r compile -c 'perl /dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/GTseq_GenoCompile_v3.pl > ../genotypes/half_pounder_GTs_0.1.csv'
+
+```
+
+# Filtering
+
+## Filtering and QC outline 
+__QAQC Check:__  
+- Check positive and negative controls (for plate flipping, other library prep errors)  
+- Check het winter summer controls  
+- Check technical replicates  
+- remove controls and replicates
+
+__Filtering:__  
+- IFI_cutoff=2.5  
+- GTperc_cutoff=90 (inds greater than 10% missing data excluded)  
+- Missingness (loci) > 20%
+- Missingness (loci) > 10% - examine for allele correction issues  
+- Remove monomorphic SNPs
+
+__File readme__  
+0.1: Raw, unfiltered GTs including all controls and replicates  
+0.2: Raw, unfiltered GTs, replicates and controls removed  
+0.3: filtered for IFI, GTperc (inds), and Missingness (loci) > 20%  
+0.4: filtered for IFI, GTperc (inds), and Missingness (loci) > 20%, and allele correction issues  
+1.0: 0.4 + removed monomorphic
+
+## QAQC
+
+### Controls
+
+First let's check that the controls worked well. We will check that negative controls have much fewer reads than average (there may be some on-target reads from otehr samples due to index sequence error)
+```{r, warning=FALSE, message=FALSE}
+#first I cleaned up the sample names with regex in a text editor - separated adapter info from sample name
+genos_0.1 <- read_csv("genotype_data/half_pounder_GTs_0.1.csv")
+
+#lets set a value to mark controls
+genos_0.1 <- genos_0.1 %>%
+  mutate(control = ifelse(grepl("positive", Sample), "positive", ifelse(grepl("negative", Sample), "negative", "sample")))
+
+ggplot()+geom_histogram(data = genos_0.1, aes(x = `On-Target Reads`, fill= control)) + theme_classic()
+
+
+```
+
+Looks good, but lets just double check that there isn't a negative with a lot of reads hiding in there and indicating a plate flip:
+
+```{r, message=FALSE, warning=FALSE}
+ggplot()+geom_histogram(data = genos_0.1[genos_0.1$control=="negative",], aes(x = `On-Target Reads`)) + theme_classic()
+
+```
+
+Uh-oh a negative control with ~6300 on target reads, but maybe there's just a lot of reads at this adapter/well, lets examine as a portion of total reads
+
+```{r, warning=FALSE}
+ggplot()+geom_histogram(data = genos_0.1, aes(x = `%On-Target`, fill= control)) + theme_classic()
+```
+
+Okay, that looks a lot better. Positive and negative controls check out.
+
+### Replicates
+
