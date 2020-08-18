@@ -15,6 +15,8 @@ require(DiagrammeR)
 require(poppr)
 require(genepop)
 require(graph4lg)
+require(related)
+require(adegenet)
 ```
 
 
@@ -24,6 +26,8 @@ This is an rstudio project. If you'd like to pre-rendered figures, read a summar
 
 
 To conduct the analyses on your computer, edit or run code: clone this repository into a directory on you r local machine and open the .Rproj file in Rstudio. All data (except raw sequencing data) and analyses are available in the github repository at https://github.com/david-dayan/rogue_half_pounder.git 
+
+__Note the section headings labeled (bad scripts) used a version of the gtseq pipeline with a bug. The steps run with the bad script were re-run and relevant sections of the notebook are labeled (corrected scripts)__
 
 # Rationale 
 
@@ -203,7 +207,9 @@ done
 ```
 
 
-# Genotype
+# Genotype  (bad scripts)
+
+Note: this section used gtseq pipeline with a bug.
 
 Here we run an array job to generate .genos files from demuxed fastqs, running 20 files in parallel at a time.
 
@@ -364,7 +370,7 @@ perl $GTSEQ_GENO $PROBE_SEQS $INFILE > $OUTFILE
 #$ -e $JOB_NAME_$TASK_ID.err
 
 #get the 2018 summer and winter
-FASTQS=(`ls /nfs1/FW_HMSC/OMalley_Lab/bohns/GTseq/OmyRogue/baseline/sample_fastqs/*fastq`)
+FASTQS=(`ls /dfs/FW_HMSC/Omalley_Lab/bohns/GTseq/OmyRogue/baseline/sample_fastqs/*fastq`)
 INFILE=${FASTQS[$SGE_TASK_ID -1]}
 
 GTSEQ_GENO="/dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/GTseq_Genotyper_v3.pl
@@ -378,6 +384,415 @@ perl $GTSEQ_GENO $PROBE_SEQS $INFILE > $OUTFILE
 
 #save as script and submit this with qsub -q harold scriptname
 ```
+
+After the genos are written for the panel, we add the sex genotyper
+```{bash, eval =FALSE}
+#the omysex script is hardcoded to require the fastqs and genos to all be in a single collective directory ... 
+#rather than try to fix this hardcoding in the script, I just coped with it and temporarily copied all the fastqs into the .genos driectory then deleted them after i was done
+
+cp /dfs1/FW_HMSC/Omalley_Lab/bohns/GTseq/OmyRogue/baseline/sample_fastqs/*fastq ./
+cp /dfs/FW_HMSC/Omalley_Lab/dayan/half_pounder/genotyping/demux/halfpound_2018/*fastq ./
+cp /dfs/FW_HMSC/Omalley_Lab/dayan/half_pounder/genotyping/demux/*fastq ./
+
+#oops it seems like the omysex script doesn't like the naming convention I used lets rename
+for file in ./*fastq.genos
+do
+   mv "$file" "${file%.fastq.genos}".genos
+done
+
+#below is the script to run the omysex script
+
+SGE_Batch -q harold -r omysex -c 'perl /dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/OmySEX_test_v3.pl'
+
+# don't forget to remove these dups when done
+
+
+```
+
+After all the .genos are written we compile them into a single output using the GenoCompile script
+
+```{bash, eval=FALSE}
+
+#this is run from within the .genos directory
+
+SGE_Batch -q harold -r compile -c 'perl /dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/GTseq_GenoCompile_v3.pl > ../genotypes/half_pounder_GTs_0.1.csv'
+
+```
+
+Run summary figs scripts
+
+```{bash, eval=FALSE}
+
+#this is run from within the .genos directory
+
+SGE_Batch -r figs -q harold -c "python /dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/GTseq_SummaryFigures_v3_troubleshooting.py '/dfs/FW_HMSC/Omalley_Lab/dayan/half_pounder/genotyping/genos'" 
+
+```
+
+# Filtering (bad scripts)
+
+## Filtering and QC outline 
+__QAQC Check:__  
+- Check positive and negative controls (for plate flipping, other library prep errors)  
+- Check het winter summer controls  
+- Check technical replicates  
+- remove controls and replicates
+
+__Filtering:__  
+- IFI_cutoff=2.5  
+- GTperc_cutoff=90 (inds greater than 10% missing data excluded)  
+- Missingness (loci) > 20%
+- Missingness (loci) > 10% - examine for allele correction issues  
+- Remove monomorphic SNPs
+
+__File readme__  
+0.1: Raw, unfiltered GTs including all controls and replicates  
+0.2: Raw, unfiltered GTs, replicates and controls removed  
+0.3: filtered for IFI, GTperc (inds), and Missingness (loci) > 20%  
+0.4: filtered for IFI, GTperc (inds), and Missingness (loci) > 20%, and allele correction issues  
+1.0: 0.4 + removed monomorphic
+
+## QAQC
+
+### Controls
+
+First let's check that the controls worked well. We will check that negative controls have much fewer reads than average (there may be some on-target reads from otehr samples due to index sequence error)
+```{r, warning=FALSE, message=FALSE}
+#first I cleaned up the sample names with regex in a text editor - separated adapter info from sample name
+genos_0.1 <- read_csv("genotype_data/half_pounder_GTs_0.1_bug.csv")
+
+#lets set a value to mark controls
+genos_0.1 <- genos_0.1 %>%
+  mutate(control = ifelse(grepl("positive", Sample), "positive", ifelse(grepl("negative", Sample), "negative", "sample")))
+
+ggplot()+geom_histogram(data = genos_0.1, aes(x = `On-Target Reads`, fill= control)) + theme_classic()
+
+
+```
+
+Looks good, but lets just double check that there isn't a negative with a lot of reads hiding in there and indicating a plate flip:
+
+```{r, message=FALSE, warning=FALSE}
+ggplot()+geom_histogram(data = genos_0.1[genos_0.1$control=="negative",], aes(x = `On-Target Reads`)) + theme_classic()
+
+```
+
+Uh-oh a negative control with ~6300 on target reads, but maybe there's just a lot of reads at this adapter/well, lets examine as a portion of total reads, and also the portion GT'd
+
+```{r, warning=FALSE}
+ggplot()+geom_histogram(data = genos_0.1, aes(x = `%On-Target`, fill= control)) + theme_classic()
+```
+
+Okay, that looks a lot better. The negative control with a lot of reads only has ~1.5% on target, much lower than most samples and positive controls. Positive and negative controls check out. Also of note here is that the positive controls are biased down w/r/t on target proportion, suggesting these samples are getting old. 
+
+### Replicates
+
+Some samples were replicated, let's check for concordance in the genotypes, the pick the sample with better GT success and throw out the duplicate.
+
+```{r, cache=TRUE, warning=FALSE, message=FALSE}
+genos_0.11 <- genos_0.1 %>%
+  filter(control == "sample") %>%
+  filter(Sample != "Winter") %>%
+  filter(Sample != "Heterozygous") %>%
+  filter(Sample != "Summer")
+dups <- genos_0.11[genos_0.11$Sample %in% genos_0.11$Sample[duplicated(genos_0.11$Sample)],]
+dups <- dups[order(dups$Sample),]
+
+# woof I don't see a good way around using a nested for loop here
+dups_genos <- dups[,8:398]
+rep_info <- matrix(ncol=ncol(dups_genos), nrow=nrow(dups_genos)/2)
+colnames(rep_info) <- colnames(dups_genos)
+for (j in 1:(nrow(dups_genos)/2)) {
+for (i in 1:ncol(dups_genos)) {
+  rep_info[j,i] <- sum(dups_genos[(j*2)-1,i]==dups_genos[(j*2),i])
+}
+  }
+
+geno_concordance <- as.data.frame(as.matrix(rep_info)) %>%
+  rowMeans()
+
+rep_data <- as.data.frame(cbind(dups[c(1:length(geno_concordance))*2,2], geno_concordance))
+ggplot(data=rep_data)+geom_histogram(aes(x=geno_concordance))+theme_classic()
+
+```
+
+There are 50 replicated samples. Mean concordance of genotype across replicates is 87%. Next let's examine whats going on with the samples with very low concordance.
+
+```{r}
+#get the bad samples
+bad_reps <- genos_0.11[genos_0.11$Sample %in% rep_data[rep_data$geno_concordance<0.50,1],1:7]
+bad_reps[order(bad_reps$Sample),]
+```
+
+One of the pair just has extremely low %On-Target reads
+
+__Replication Summary__
+Replicate samples look good, bad replicates (<50% concordance) seems to be due to one replicate having extremely low GT success. 
+
+Next let's make the 0.2 dataset.
+```{r}
+genos_0.2 <- genos_0.11 %>%
+  group_by(Sample) %>%
+  filter(`On-Target Reads` == max(`On-Target Reads`))
+
+#lets merge this dataset with our metadata and do a sanity check
+meta_data[!(meta_data$ID %in% genos_0.2$Sample),1:3]
+```
+
+There are 976 individuals in the meta_data (i.e. were taken in), but 5 (all winter baseline fish) did not have output fastqs in the raw data directory and were excluded from genotyping...
+
+The 0.2 genotype dataset consists of 971 individuals
+
+### Filtering
+- IFI_cutoff=2.5  
+- GTperc_cutoff=90 (inds greater than 10% missing data excluded)  
+- Missingness (loci) > 20%
+- Missingness (loci) > 10% - examine for allele correction issues  
+- Remove monomorphic SNPs
+
+Next we move on to filtering individuals and loci on IFI, and missingness. 
+
+First let's take a look at the distribution of these values
+```{r, message=FALSE, warning=FALSE}
+ggplot(genos_0.2)+geom_histogram(aes(x=IFI))+geom_vline(aes(xintercept= 2.5), color="red")+theme_classic()
+ggplot(genos_0.2)+geom_histogram(aes(x=`%GT`))+geom_vline(aes(xintercept= 90), color="red")+theme_classic()
+
+missingness <- (colSums(genos_0.2[,8:398] == "00"))/nrow(genos_0.2)
+missing <- as.data.frame(missingness)
+missing$marker <- row.names(missing)
+ggplot(missing) + geom_histogram(aes(x=missingness))+geom_vline(aes(xintercept= 0.2), color="red")+geom_vline(aes(xintercept= 0.1), color="blue")+theme_classic()+xlab("missingness (loci)")
+```
+
+Now let's make the datasets.  
+__0.3__
+```{r}
+genos_0.2 %>%
+  filter(IFI >2.5)
+
+genos_0.2 %>%
+  filter(`%GT` < 90)
+
+sum(missing$missingness>0.2)
+
+bad_markers <- missing[missing$missingness>0.2, 2]
+
+genos_0.3 <- genos_0.2 %>%
+  filter(IFI <2.5) %>%
+  filter(`%GT` > 90) %>%
+  dplyr::select(-one_of(bad_markers))
+  
+```
+
+__Filtering log 0.2 -> 0.3:__
+4 inds removed with IFI > 2.5  
+96 inds removed with genotying success less than 90%  
+23 loci removed with > 20% missingness  
+
+Leaves a dataset of 875 individuals and 368 markers.
+
+__0.4__
+Next we examine markers with moderately bad genotyping success to attempt to figure out what's going on. 
+
+
+Could not get the summary_figures script to run, so decided to pull the data myself
+The script below will pull the allele count ratios and read counts for all individuals in the pipeline
+```{bash, eval = FALSE}
+#collect marker info from all the genos files
+touch marker_info.txt
+for file in ./*genos
+do
+    awk ' FS="," {print FILENAME,$1,$2,$3,$6,$7,$8}' $file >> marker_info.txt
+done
+
+#added headers (ind, marker, a1_count, a2_count, called_geno, a1_corr, a2_corr) and cleaned up with regex in texteditor
+```
+
+Let's take a look at the bad markers (10-20% missingness)
+```{r}
+#get marker names of markers with 0.1 > missingness > 0.2
+miss0.1 <- missing[missing$missingness > 0.1,]
+miss_mod <- miss0.1[miss0.1$missingness < 0.2, 2]
+```
+
+There are 38 markers with moderately poor genotyping success (i.e. less than 20% missingess, but greater than 10% missingness). Previously these types of markers were filtered on an adhoc basis based on the extent of individuals with unclear genotypes (a lot of individuals not falling in the clear cutoffs for GT). Will attempt the same below:
+
+Let's explore look at one of the markers individual. We'll create a similar plot to those generated by the GTseq figures script.
+
+```{r, message=FALSE, warning=FALSE, eval=FALSE}
+marker_info <- read_tsv("genotype_data/marker_info_bug.txt")
+marker_info$a1_count <- as.numeric(marker_info$a1_count)
+marker_info$a2_count <- as.numeric(marker_info$a2_count)
+
+#plot for markers with no allele correction
+ggplot(data=marker_info[marker_info$marker=="Chr28_11671116",])+geom_point(aes(a1_count, a2_count, color = called_geno))+theme_classic()+geom_abline(aes(slope=1, intercept=0))+geom_abline(aes(slope = 10, intercept=0))+geom_abline(aes(slope = 0.1, intercept=0))+geom_abline(aes(slope = 5, intercept=0))+geom_abline(aes(slope = .2, intercept=0))+coord_equal(ratio=1)+geom_abline(slope = -1, intercept = 10)+ coord_fixed(ratio =1 , xlim =c(-2,max( marker_info[marker_info$marker=="Chr28_11671116","a1_count"])), ylim = c(-2,max( marker_info[marker_info$marker=="Chr28_11671116","a2_count"])), expand = FALSE )
+
+ggplot(data=marker_info[marker_info$marker=="OMS00008",])+geom_point(aes(a1_count, a2_count, color = called_geno))+theme_classic()+geom_abline(aes(slope=1, intercept=0))+geom_abline(aes(slope = 10, intercept=0))+geom_abline(aes(slope = 0.1, intercept=0))+geom_abline(aes(slope = 0.5, intercept=0))+geom_abline(aes(slope = 5, intercept=0))+coord_equal(ratio=1)+geom_abline(slope = -1, intercept = 10)+xlim(c(0,100))+ylim(c(0,100))
+
+#wtf is going on here, there are NAs called where there shouldn't be according to the gtseq manuscript
+marker_info %>%
+  filter(called_geno =="HET") %>%
+  mutate(ratio = a1_count/a2_count) %>%
+  summarise(min=min(ratio, na.rm = TRUE), max=max(ratio, na.rm = TRUE))
+
+#okay the actual cutoffs used were 0.2 and 2, which are not symmetrical
+
+a <- ggplot(data=marker_info[marker_info$marker=="OMS00008",])+geom_point(aes(a1_count, a2_count, color = called_geno),alpha=0.5)+theme_classic()+geom_abline(aes(slope=1, intercept=0))+geom_abline(aes(slope = 10, intercept=0), color = "green")+geom_abline(aes(slope = 0.1, intercept=0), color = "red")+geom_abline(aes(slope = 0.5, intercept=0), color = "blue")+geom_abline(aes(slope = 5, intercept=0), color = "blue")+coord_equal(ratio=1)+geom_abline(slope = -1, intercept = 10)+ coord_fixed(ratio =1 , xlim =c(-2,max( marker_info[marker_info$marker=="OMS00008","a1_count"])), ylim = c(-2,max( marker_info[marker_info$marker=="OMS00008","a2_count"])), expand = FALSE )+ggtitle("(A) cutoff in data and from pipeline: \n(0.2 - 2)(A1/A2) ")
+
+
+b <- ggplot(data=marker_info[marker_info$marker=="OMS00008",])+geom_point(aes(a1_count, a2_count, color = called_geno), alpha = 0.7, size =2)+theme_classic()+geom_abline(aes(slope=1, intercept=0))+geom_abline(aes(slope = 10, intercept=0), color = "green")+geom_abline(aes(slope = 0.1, intercept=0), color = "red")+geom_abline(aes(slope = 0.5, intercept=0), color = "blue")+geom_abline(aes(slope = 5, intercept=0), color = "blue")+coord_equal(ratio=1)+geom_abline(slope = -1, intercept = 10)+xlim(c(0,50))+ylim(c(0,50))+ggtitle("(B) cutoff in data and from pipeline: \n(0.2 - 2)(A1/A2)    zoomed") #note these lines are inverse of ratios because slope is y/x, plot is allele1 (x) vs allele2 (y) and "ratio" in the script is allele1/allele 2
+
+c <- ggplot(data=marker_info[marker_info$marker=="OMS00008",])+geom_point(aes(a1_count, a2_count, color = called_geno), alpha = 0.7, size =2)+theme_classic()+geom_abline(aes(slope=1, intercept=0))+geom_abline(aes(slope = 10, intercept=0), color = "green")+geom_abline(aes(slope = 0.1, intercept=0), color = "red")+geom_abline(aes(slope = 0.2, intercept=0), color = "blue")+geom_abline(aes(slope = 5, intercept=0), color = "blue")+coord_equal(ratio=1)+geom_abline(slope = -1, intercept = 10)+xlim(c(0,50))+ylim(c(0,50))+ggtitle("(C) stated cutoff in gtseq manuscript\n (0.2 - 5)(A1/A2)")
+
+d <- ggplot(data=marker_info[marker_info$marker=="OMS00008",])+geom_point(aes(a1_count, a2_count, color = called_geno), alpha = 0.7, size =2)+theme_classic()+geom_abline(aes(slope=1, intercept=0))+geom_abline(aes(slope = 10, intercept=0), color = "green")+geom_abline(aes(slope = 0.1, intercept=0), color = "red")+geom_abline(aes(slope = 0.5, intercept=0), color = "blue")+geom_abline(aes(slope = 2, intercept=0), color = "blue")+coord_equal(ratio=1)+geom_abline(slope = -1, intercept = 10)+xlim(c(0,50))+ylim(c(0,50))+ggtitle("(D) cutoff from summary figs script\n(0.5 - 2)(A1/A2)")
+
+cowplot::plot_grid(a,b,c,d)
+
+plots <- marker_info %>%
+  group_by(marker) %>%
+  do(plots=ggplot(data=.)+geom_point(aes(a1_count, a2_count, color = called_geno))+theme_classic()+geom_abline(aes(slope=1, intercept=0))+geom_abline(aes(slope = 10, intercept=0), color = "green")+geom_abline(aes(slope = 0.1, intercept=0), color = "red")+geom_abline(aes(slope = 0.2, intercept=0), color = "blue")+geom_abline(aes(slope = 5, intercept=0), color = "blue")+coord_equal(ratio=1)+geom_abline(slope = -1, intercept = 10)+ggtitle(unique(.$marker)))
+
+#plot all "bad markers"
+plots$plots[plots$marker %in% miss_mod]
+
+```
+
+# Bug Report
+
+This QC step above (not run in notebook, but run code chunk above to see figures) resulted in the discovery of bug in the gtseq genotyper and gtseq summary figure script. The cutoff's reported in the manuscript were different than those in the scripts, and there was inconsistencies in the values used across scripts in the pipeline.
+
+To fix this we renamed the directories containing the bad outputs (appended _bug) and started from demultiplexed reads again. The corrected script adjusts the allele ratio cutoff for hets from 0.2 - 5, by changing line 210 in the v3 script to the following code chunk. This corrected script is at /dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/GTseq_Genotyper_v3.1.pl
+
+All notebook sections effected have (bad scripts) appended to their title. Notebook section using the updated script appear below and carry (corrected scripts) if they are duplicated.
+
+```{perl, eval=FALSE}
+elsif ($ratio <= 5) {$geno = "$allele1name{$loci}$allele2name{$loci}"; $genoclass = "HET";}
+```
+
+
+# Genotype (corrected scripts)
+
+Can start directly from the genotyper script and skip some of the prep done in the genotype (bad script) section.
+
+Next we'll run the GTseq genotyper (v3.1) script on each fastq file to generate the individual level .genos outputs. This is run for the new data as well as the old. Each set is run as a separate array job. The probe_seq file is full the full 390 SNP panel with allele correction values from CRITFC.
+
+First set the perl environment
+```{bash, eval=FALSE}
+#installed String::Approx (copied tar.gz and followed install in the readme)
+
+setenv PERL5LIB ~/perl5/lib/perl5/x86_64-linux-thread-multi/ #for tcsh
+export PERL5LIB='/home/fw/dayand/perl5/lib/perl5/x86_64-linux-thread-multi/' # for bash
+
+#note i've been running in bash so neet to set the environmental variables a little differently
+```
+
+then run the genotyper
+first the lane2 data
+```{bash, eval=FALSE}
+
+#!/bin/bash
+#$ -S /bin/bash
+
+#$ -t 1-554
+
+#$ -tc 20
+
+#$ -N GTseq-genotyperv3
+
+#$ -cwd
+
+#$ -o $JOB_NAME_$TASK_ID.out
+
+#$ -e $JOB_NAME_$TASK_ID.err
+export PERL5LIB='/home/fw/dayand/perl5/lib/perl5/x86_64-linux-thread-multi/'
+
+FASTQS=(`ls /dfs/FW_HMSC/Omalley_Lab/dayan/half_pounder/genotyping/demux/*fastq`)
+INFILE=${FASTQS[$SGE_TASK_ID -1]}
+OUTFILE=$(basename ${INFILE%.fastq.gz}.genos)
+
+GTSEQ_GENO="/dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/GTseq_Genotyper_v3.1.pl
+"
+
+PROBE_SEQS="/dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/Omy_GTseq390_ProbeSeqs.csv"
+
+perl $GTSEQ_GENO $PROBE_SEQS $INFILE > $OUTFILE
+
+#save as script and submit this with qsub -q harold scriptname in the ./genos/ dir
+```
+
+then the 2018 halfpounders
+```{bash, eval=FALSE}
+
+#!/bin/bash
+#$ -S /bin/bash
+
+#$ -t 1-407
+
+#$ -tc 10
+
+#$ -N GTseq-genotyperv3
+
+#$ -cwd
+
+#$ -o $JOB_NAME_$TASK_ID.out
+
+#$ -e $JOB_NAME_$TASK_ID.err
+
+#get the 2018 halfpounders
+export PERL5LIB='/home/fw/dayand/perl5/lib/perl5/x86_64-linux-thread-multi/'
+
+
+FASTQS=(`ls /dfs/FW_HMSC/Omalley_Lab/dayan/half_pounder/genotyping/demux/halfpound_2018/*fastq`)
+INFILE=${FASTQS[$SGE_TASK_ID -1]}
+
+GTSEQ_GENO="/dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/GTseq_Genotyper_v3.1.pl
+"
+
+OUTFILE=$(basename ${INFILE%.fastq}.genos)
+
+PROBE_SEQS="/dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/Omy_GTseq390_ProbeSeqs.csv"
+
+perl $GTSEQ_GENO $PROBE_SEQS $INFILE > $OUTFILE
+
+#save as script and submit this with qsub -q harold scriptname
+```
+
+
+```{bash, eval=FALSE}
+
+#!/bin/bash
+#$ -S /bin/bash
+
+#$ -t 1-96
+
+#$ -tc 10
+
+#$ -N GTseq-genotyperv3
+
+#$ -cwd
+
+#$ -o $JOB_NAME_$TASK_ID.out
+
+#$ -e $JOB_NAME_$TASK_ID.err
+
+#get the 2018 summer and winter
+export PERL5LIB='/home/fw/dayand/perl5/lib/perl5/x86_64-linux-thread-multi/'
+
+
+FASTQS=(`ls /nfs1/FW_HMSC/OMalley_Lab/bohns/GTseq/OmyRogue/baseline/sample_fastqs/*fastq`)
+INFILE=${FASTQS[$SGE_TASK_ID -1]}
+
+GTSEQ_GENO="/dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/GTseq_Genotyper_v3.1.pl
+"
+
+OUTFILE=$(basename ${INFILE%fastq}.genos)
+
+PROBE_SEQS="/dfs/FW_HMSC/Omalley_Lab/dayan/software/GTseq-Pipeline/Omy_GTseq390_ProbeSeqs.csv"
+
+perl $GTSEQ_GENO $PROBE_SEQS $INFILE > $OUTFILE
+
+#save as script and submit this with qsub -q harold scriptname
+```
+
 
 After the genos are written for the panel, we add the sex genotyper
 ```{bash, eval =FALSE}
@@ -413,7 +828,7 @@ SGE_Batch -q harold -r compile -c 'perl /dfs/FW_HMSC/Omalley_Lab/dayan/software/
 
 ```
 
-# Filtering
+# Filtering (corrected scripts)
 
 ## Filtering and QC outline 
 __QAQC Check:__  
@@ -428,13 +843,16 @@ __Filtering:__
 - Missingness (loci) > 20%
 - Missingness (loci) > 10% - examine for allele correction issues  
 - Remove monomorphic SNPs
+- Remove duplicated individuals
 
 __File readme__  
 0.1: Raw, unfiltered GTs including all controls and replicates  
 0.2: Raw, unfiltered GTs, replicates and controls removed  
 0.3: filtered for IFI, GTperc (inds), and Missingness (loci) > 20%  
 0.4: filtered for IFI, GTperc (inds), and Missingness (loci) > 20%, and allele correction issues  
-1.0: 0.4 + removed monomorphic
+1.0: 0.4 + removed monomorphic  
+2.0: 1.0 + duplicate sample removal  
+2.2:  final genotype dataset with metadata (population, run, sample date)  
 
 ## QAQC
 
@@ -461,13 +879,332 @@ ggplot()+geom_histogram(data = genos_0.1[genos_0.1$control=="negative",], aes(x 
 
 ```
 
-Uh-oh a negative control with ~6300 on target reads, but maybe there's just a lot of reads at this adapter/well, lets examine as a portion of total reads
+Uh-oh a negative control with ~6300 on target reads, but maybe there's just a lot of reads at this adapter/well, lets examine as a portion of total reads, and also the portion GT'd
 
 ```{r, warning=FALSE}
 ggplot()+geom_histogram(data = genos_0.1, aes(x = `%On-Target`, fill= control)) + theme_classic()
 ```
 
-Okay, that looks a lot better. Positive and negative controls check out.
+Okay, that looks a lot better. The negative control with a lot of reads only has ~XXXXX % on target, much lower than most samples and positive controls. Positive and negative controls check out. Also of note here is that the positive controls are biased down w/r/t on target proportion, suggesting these samples are getting old. 
 
 ### Replicates
+
+Some samples were replicated, let's check for concordance in the genotypes, the pick the sample with better GT success and throw out the duplicate.
+
+```{r, cache=TRUE, warning=FALSE, message=FALSE}
+#change to undo cache
+genos_0.11 <- genos_0.1 %>%
+  filter(control == "sample") %>%
+  filter(Sample != "Winter") %>%
+  filter(Sample != "Heterozygous") %>%
+  filter(Sample != "Summer")
+dups <- genos_0.11[genos_0.11$Sample %in% genos_0.11$Sample[duplicated(genos_0.11$Sample)],]
+dups <- dups[order(dups$Sample),]
+
+# woof I don't see a good way around using a nested for loop here
+dups_genos <- dups[,8:398]
+rep_info <- matrix(ncol=ncol(dups_genos), nrow=nrow(dups_genos)/2)
+colnames(rep_info) <- colnames(dups_genos)
+for (j in 1:(nrow(dups_genos)/2)) {
+for (i in 1:ncol(dups_genos)) {
+  rep_info[j,i] <- sum(dups_genos[(j*2)-1,i]==dups_genos[(j*2),i])
+}
+  }
+
+geno_concordance <- as.data.frame(as.matrix(rep_info)) %>%
+  rowMeans()
+
+rep_data <- as.data.frame(cbind(dups[c(1:length(geno_concordance))*2,2], geno_concordance))
+ggplot(data=rep_data)+geom_histogram(aes(x=geno_concordance))+theme_classic()
+
+```
+
+There are 50 replicated samples. Mean concordance of genotype across replicates is 87.3%. Next let's examine whats going on with the samples with very low concordance.
+
+```{r}
+#get the bad samples
+bad_reps <- genos_0.11[genos_0.11$Sample %in% rep_data[rep_data$geno_concordance<0.50,1],1:7]
+bad_reps[order(bad_reps$Sample),]
+```
+
+One of the pair just has extremely low %On-Target reads
+
+__Replication Summary__
+Replicate samples look good, bad replicates (<50% concordance) seems to be due to one replicate of the pair having extremely low GT success. 
+
+Next let's make the 0.2 dataset.
+```{r}
+genos_0.2 <- genos_0.11 %>%
+  group_by(Sample) %>%
+  filter(`On-Target Reads` == max(`On-Target Reads`))
+
+#lets merge this dataset with our metadata and do a sanity check
+meta_data[!(meta_data$ID %in% genos_0.2$Sample),1:3]
+```
+
+There are 976 individuals in the meta_data (i.e. were taken in), but 8 (all baseline fish) did not have output fastqs in the raw data directory and were excluded from genotyping...
+
+The 0.2 genotype dataset consists of 971 individuals
+
+### Filtering
+
+- IFI_cutoff=2.5  
+- GTperc_cutoff=90 (inds greater than 10% missing data excluded)  
+- Missingness (loci) > 20%
+- Missingness (loci) > 10% - examine for allele correction issues  
+- Remove monomorphic SNPs
+
+Next we move on to filtering individuals and loci on IFI, and missingness. 
+
+First let's take a look at the distribution of these values
+```{r, message=FALSE, warning=FALSE}
+ggplot(genos_0.2)+geom_histogram(aes(x=IFI))+geom_vline(aes(xintercept= 2.5), color="red")+theme_classic()
+ggplot(genos_0.2)+geom_histogram(aes(x=`%GT`))+geom_vline(aes(xintercept= 90), color="red")+theme_classic()
+
+missingness <- (colSums(genos_0.2[,8:398] == "00"))/nrow(genos_0.2)
+missing <- as.data.frame(missingness)
+missing$marker <- row.names(missing)
+ggplot(missing) + geom_histogram(aes(x=missingness))+geom_vline(aes(xintercept= 0.2), color="red")+geom_vline(aes(xintercept= 0.1), color="blue")+theme_classic()+xlab("missingness (loci)")
+```
+
+Now let's make the datasets.  
+__0.3__
+```{r}
+genos_0.2 %>%
+  filter(IFI >2.5)
+
+genos_0.2 %>%
+  filter(`%GT` < 90)
+
+sum(missing$missingness>0.2)
+
+bad_markers <- missing[missing$missingness>0.2, 2]
+
+genos_0.3 <- genos_0.2 %>%
+  filter(IFI <2.5) %>%
+  filter(`%GT` > 90) %>%
+  dplyr::select(-one_of(bad_markers))
+  
+```
+
+__Filtering log 0.2 -> 0.3:__  
+5 inds removed with IFI > 2.5  
+49 inds removed with genotying success less than 90%  
+19 loci removed with > 20% missingness  
+
+Leaves a dataset of 918 individuals and 373 markers.  
+
+__0.4__
+Next we examine markers with moderately bad genotyping success to attempt to figure out what's going on. 
+
+
+Could not get the summary_figures script to run, so decided to pull the data myself
+The script below will pull the allele count ratios and read counts for all individuals in the pipeline
+```{bash, eval = FALSE}
+#collect marker info from all the genos files
+touch marker_info.txt
+for file in ./*genos
+do
+    awk ' FS="," {print FILENAME,$1,$2,$3,$6,$7,$8}' $file >> marker_info.txt
+done
+
+#added headers (ind, marker, a1_count, a2_count, called_geno, a1_corr, a2_corr) and cleaned up with regex in texteditor
+```
+
+Let's take a look at the bad markers (10-20% missingness)
+```{r}
+#get marker names of markers with 0.1 > missingness > 0.2
+miss0.1 <- missing[missing$missingness > 0.1,]
+miss_mod <- miss0.1[miss0.1$missingness < 0.2, 2]
+```
+
+There are 18 markers with moderately poor genotyping success (i.e. less than 20% missingess, but greater than 10% missingness)(an improvement of 20 markers from the genotyper script with an error). Previously these types of markers were filtered on an adhoc basis based on the extent of individuals with unclear genotypes (a lot of individuals not falling in the clear cutoffs for GT). Will attempt the same below:
+
+Let's explore look at one of the markers individual. We'll create a similar plot to those generated by the GTseq figures script.
+
+Below we show plots for one representative good marker, and one representative marker with issues. 
+```{r, message=FALSE, warning=FALSE}
+marker_info <- read_tsv("genotype_data/marker_info.txt")
+marker_info$a1_count <- as.numeric(marker_info$a1_count)
+marker_info$a2_count <- as.numeric(marker_info$a2_count)
+
+#plot for markers with no allele correction
+#ggplot(data=marker_info[marker_info$marker=="Chr28_11671116",])+geom_point(aes(a1_count, a2_count, color = called_geno))+theme_classic()+geom_abline(aes(slope=1, intercept=0))+geom_abline(aes(slope = 10, intercept=0))+geom_abline(aes(slope = 0.1, intercept=0))+geom_abline(aes(slope = 5, intercept=0))+geom_abline(aes(slope = .2, intercept=0))+coord_equal(ratio=1)+geom_abline(slope = -1, intercept = 10)+ coord_fixed(ratio =1 , xlim =c(-2,max( marker_info[marker_info$marker=="Chr28_11671116","a1_count"])), ylim = c(-2,max( marker_info[marker_info$marker=="Chr28_11671116","a2_count"])), expand = FALSE )
+
+#ggplot(data=marker_info[marker_info$marker=="OMS00008",])+geom_point(aes(a1_count, a2_count, color = called_geno))+theme_classic()+geom_abline(aes(slope=1, intercept=0))+geom_abline(aes(slope = 10, intercept=0))+geom_abline(aes(slope = 0.1, intercept=0))+geom_abline(aes(slope = 0.5, intercept=0))+geom_abline(aes(slope = 5, intercept=0))+coord_equal(ratio=1)+geom_abline(slope = -1, intercept = 10)+xlim(c(0,100))+ylim(c(0,100))
+
+#wtf is going on here, there are NAs called where there shouldn't be according to the gtseq manuscript
+marker_info %>%
+  filter(called_geno =="HET") %>%
+  mutate(ratio = a1_count/a2_count) %>%
+  summarise(min=min(ratio, na.rm = TRUE), max=max(ratio, na.rm = TRUE))
+
+#okay the actual cutoffs used were 0.2 and 2, which are not symmetrical
+
+# a <- ggplot(data=marker_info[marker_info$marker=="OMS00008",])+geom_point(aes(a1_count, a2_count, color = called_geno),alpha=0.5)+theme_classic()+geom_abline(aes(slope=1, intercept=0))+geom_abline(aes(slope = 10, intercept=0), color = "green")+geom_abline(aes(slope = 0.1, intercept=0), color = "red")+geom_abline(aes(slope = 0.5, intercept=0), color = "blue")+geom_abline(aes(slope = 5, intercept=0), color = "blue")+coord_equal(ratio=1)+geom_abline(slope = -1, intercept = 10)+ coord_fixed(ratio =1 , xlim =c(-2,max( marker_info[marker_info$marker=="OMS00008","a1_count"])), ylim = c(-2,max( marker_info[marker_info$marker=="OMS00008","a2_count"])), expand = FALSE )+ggtitle("(A) cutoff in data and from pipeline: \n(0.2 - 2)(A1/A2) ")
+
+
+# b <- ggplot(data=marker_info[marker_info$marker=="OMS00008",])+geom_point(aes(a1_count, a2_count, color = called_geno), alpha = 0.7, size =2)+theme_classic()+geom_abline(aes(slope=1, intercept=0))+geom_abline(aes(slope = 10, intercept=0), color = "green")+geom_abline(aes(slope = 0.1, intercept=0), color = "red")+geom_abline(aes(slope = 0.5, intercept=0), color = "blue")+geom_abline(aes(slope = 5, intercept=0), color = "blue")+coord_equal(ratio=1)+geom_abline(slope = -1, intercept = 10)+xlim(c(0,50))+ylim(c(0,50))+ggtitle("(B) cutoff in data and from pipeline: \n(0.2 - 2)(A1/A2)    zoomed") #note these lines are inverse of ratios because slope is y/x, plot is allele1 (x) vs allele2 (y) and "ratio" in the script is allele1/allele 2
+
+ggplot(data=marker_info[marker_info$marker=="OMS00008",])+geom_point(aes(a1_count, a2_count, color = called_geno), alpha = 0.7, size =2)+theme_classic()+geom_abline(aes(slope=1, intercept=0))+geom_abline(aes(slope = 10, intercept=0), color = "green")+geom_abline(aes(slope = 0.1, intercept=0), color = "red")+geom_abline(aes(slope = 0.2, intercept=0), color = "blue")+geom_abline(aes(slope = 5, intercept=0), color = "blue")+coord_equal(ratio=1)+geom_abline(slope = -1, intercept = 10)+xlim(c(0,150))+ylim(c(0,150))+ggtitle("(C) stated cutoff in gtseq manuscript\n (0.2 - 5)(A1/A2)")
+
+ggplot(data=marker_info[marker_info$marker=="Omy_RAD46672-27",])+geom_point(aes(a1_count, a2_count, color = called_geno), alpha = 0.7, size =2)+theme_classic()+geom_abline(aes(slope=1, intercept=0))+geom_abline(aes(slope = 10, intercept=0), color = "green")+geom_abline(aes(slope = 0.1, intercept=0), color = "red")+geom_abline(aes(slope = 0.2, intercept=0), color = "blue")+geom_abline(aes(slope = 5, intercept=0), color = "blue")+coord_equal(ratio=1)+geom_abline(slope = -1, intercept = 10)+xlim(c(0,150))+ylim(c(0,150))+ggtitle("(C) stated cutoff in gtseq manuscript\n (0.2 - 5)(A1/A2)")
+
+#d <- ggplot(data=marker_info[marker_info$marker=="OMS00008",])+geom_point(aes(a1_count, a2_count, color = called_geno), alpha = 0.7, size =2)+theme_classic()+geom_abline(aes(slope=1, intercept=0))+geom_abline(aes(slope = 10, intercept=0), color = "green")+geom_abline(aes(slope = 0.1, intercept=0), color = "red")+geom_abline(aes(slope = 0.5, intercept=0), color = "blue")+geom_abline(aes(slope = 2, intercept=0), color = "blue")+coord_equal(ratio=1)+geom_abline(slope = -1, intercept = 10)+xlim(c(0,50))+ylim(c(0,50))+ggtitle("(D) cutoff from summary figs script\n(0.5 - 2)(A1/A2)")
+
+
+plots <- marker_info %>%
+  group_by(marker) %>%
+  do(plots=ggplot(data=.)+geom_point(aes(a1_count, a2_count, color = called_geno))+theme_classic()+geom_abline(aes(slope=1, intercept=0))+geom_abline(aes(slope = 10, intercept=0), color = "green")+geom_abline(aes(slope = 0.1, intercept=0), color = "red")+geom_abline(aes(slope = 0.2, intercept=0), color = "blue")+geom_abline(aes(slope = 5, intercept=0), color = "blue")+coord_equal(ratio=1)+geom_abline(slope = -1, intercept = 10)+ggtitle(unique(.$marker)))
+
+#plot all "bad markers"
+#mod_bad_plot_index <- which(plots$marker %in% miss_mod)
+# plots$plots[[mod_bad_plot_index[10]]] #manually looped through these plots by changing the index for all 28 moderately bad markers, could make an lapply loop in the future, bad markers reported below
+
+```
+
+Among the markers with moderately bad genotyping success the following 3 markers had issues and were removed. 
+
+Omy_RAD46672-27 - a2 biased  
+Omy_RAD52458-17 - a1 biased line (and 1:1), population level variation in paralog divergence?
+
+
+```{r}
+to_filt <- c("Omy_RAD46672-27", "Omy_RAD52458-17")
+genos_0.4 <- genos_0.3 %>%
+  dplyr::select(-one_of(to_filt))
+```
+
+Leaves a dataset of 918 individuals and 370 markers.
+
+__1.0__
+
+To generate the 1.0 dataset, we remove monomorphic markers
+
+```{r}
+genos_1.0 <- genos_0.4 %>% 
+  select_if(~ length(unique(.)) > 1)
+```
+
+This removed 16 monomorphic loci. The 1.0 dataset has 918 individuals and 355 markers. 
+
+__Duplicate Samples__
+
+Some sample tissues were provided in batches of ~50 fin clips. Let's make sure no fin clips broke apart leading to a single individual to be represented twice in the dataset. Rather than fussing with installing coancestry for windows on a unix system, estimated relatedness using an R package (related) which can implement the code from Coancester
+
+We used the estimator from Lynch and Ritland 1999 #not dyadic likelihood estimator, Milligan (2003) 
+```{r, eval=FALSE}
+# needs a unique row for each indiviudal and two columns for each diploid locus
+# threw out metadata nd wrote to a file
+# then we split all the genotype values using regex in a text editor (after converting all na values to 0)
+#   find string: \t([ATGC0XY])([ATCG0XY])  replace string: \t\1\t\2
+# convert genos to numbers and removed sex marker
+#convert to integer T-1 G->2 etc
+
+just_genos <- genos_1.0[,c(2, 8:357)]
+write_tsv(just_genos, "genotype_data/just_genos.txt")
+
+# now run coancestry
+rmat <- coancestry("./genotype_data/just_genos.txt", dyadml = 1)
+rmat2 <- coancestry("./genotype_data/just_genos.txt", lynchrd  = 1)
+
+# save the relevant info so we don't have to run this over and over and take up a ton of diskspace
+rmat_to_save <- rmat2$relatedness[rmat2$relatedness$lynchrd > 0.5,]
+save(rmat_to_save, file="genotype_data/relatedness.Rdata")
+```
+
+Check for highly related individuals and remove any >= 1 from the dataset
+```{r}
+#Check for relatedness
+load(file = "genotype_data/relatedness.Rdata")
+#ggplot(rmat_to_save$relatedness)+geom_histogram(aes(x=lynchrd))+theme_classic()
+rmat_to_save[which(rmat_to_save$lynchrd >=0.95), c(1:3)]
+
+dup_inds <- rmat_to_save[which(rmat_to_save$lynchrd >= 0.95), c(1:3)]
+
+genos_2.0 <- genos_1.0 %>%
+  filter(!(Sample %in% dup_inds$ind2.id))
+```
+
+There were 39 pairs of duplicated samples. All (but two pairs) were among the half pounders and within a single year. All were also within <50 of each other w respct to their ID number, suggesting they were from the same jar. 
+
+The final filtered dataset contains 882 samples genotyped at 355 markers.
+
+# File Conversion and Stats
+
+Final step of genotyping is to collect some stats about the genotype dataset and reformat the genotype file into common formats for import.
+
+## Stats
+
+
+```{r, fig.cap="On Target Read Distribution"}
+ggplot(genos_2.0)+geom_density(aes(x=`On-Target Reads`))+geom_vline(aes(xintercept=median(`On-Target Reads`)), color = "red") +theme_classic()
+```
+
+The median number of on target reads was 98104. There were 350,847,984 reads contributing to the samples included in the final dataset and 407,683,506 reads contributing to all individuals. 
+
+```{r, fig.cap="Proportion on Target"}
+ggplot(genos_2.0)+geom_density(aes(x=`%On-Target`))+geom_vline(aes(xintercept=median(`%On-Target`)), color = "red") +theme_classic()
+```
+
+The median proportion of on target reads was 30%.
+
+```{r, warning=FALSE, message=FALSE}
+#code to estimate depth at filtered loci
+marker_info %>%
+  filter(marker %in% colnames(genos_2.0)) %>%
+  mutate(sumdepth=a1_count+a2_count) %>%
+  summarise(mean=mean(sumdepth, na.rm = TRUE), median=median(sumdepth, na.rm = TRUE), sd=sd(sumdepth, na.rm = TRUE))
+
+marker_info %>%
+  filter(marker %in% colnames(genos_2.0)) %>%
+  mutate(sumdepth=a1_count+a2_count) %>%
+  ggplot + aes(x=sumdepth)+geom_histogram()+theme_classic()
+```
+
+The median sequencing depth was 166, and the mean was 278 +- 375 (sd)
+
+A note here, this is a huge depth with a huge variance, optimizing primers to reduce variance could allow many fold increase in multiplexing for a lane if desired. Also there is a huge right tail, suggesting some primers are hitting highly repetive sequence and are hogging sequencing.
+
+Finally here are the number of samples per run after filtering
+```{r}
+genos_2.0 %>%
+  left_join(meta_data, by = c("Sample" = "ID")) %>%
+  group_by(run, year) %>%
+  tally()
+```
+
+
+## Conversion
+
+Let's get some usable file formats
+
+```{r, eval=FALSE}
+
+# import into adegenet
+
+#first get a matrix to work on
+
+#first change column to not include a dot
+genos_2.1 <- genos_2.0
+colnames(genos_2.1) <- gsub("\\.", "_", colnames(genos_2.1))
+#convert to matrix with inds as row names
+genos_2.1 <- as.matrix(genos_2.1[,c(8:362)])
+row.names(genos_2.1) <- genos_2.0$Sample
+genind_1.0 <- df2genind(genos_2.1, sep ="", ploidy=2,NA.char = "0")
+
+#add in the populations
+genos_2.2 <- genos_2.0 %>%
+  left_join(meta_data, by=c("Sample" = "ID"))
+
+genind_1.0@pop <- as.factor(genos_2.2$run)
+
+```
+
+```{r, eval = FALSE}
+# here we save a few objects with useful info
+genind_2.0 <- genind_1.0
+save(genos_2.2, file ="./genotype_data/genotypes_2.2.R")
+save(genind_2.0, file= "./genotype_data/genind_2.0.R")
+```
 

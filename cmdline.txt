@@ -1,9 +1,0 @@
-Genepop
-GenepopInputFile=./genotype_data/runloci.txt
-MenuOptions=2:1
-Dememorisation=10000
-BatchNumber=100
-BatchLength=5000
-RandomSeed=67144630
-Mode=Batch
-

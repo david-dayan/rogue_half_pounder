@@ -1,0 +1,17 @@
+base
+tidyverse
+ggplot2
+tibble
+tidyr
+readr
+purrr
+dplyr
+stringr
+forcats
+DiagrammeR
+ade4
+adegenet
+poppr
+genepop
+graph4lg
+related
