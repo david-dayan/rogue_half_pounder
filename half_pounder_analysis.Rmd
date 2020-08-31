@@ -1,14 +1,14 @@
 ---
 title: "Half Pounder Analysis"
 output:
-  pdf_document:
-    toc: yes
   html_document:
     code_folding: hide
     df_print: paged
     toc: yes
     toc_collapsed: no
     toc_float: yes
+  pdf_document:
+    toc: yes
 ---
 
 ```{r, message=FALSE, warning=FALSE}
@@ -45,14 +45,18 @@ This study attempts to use neutral and adaptive GTseq markers to examine populat
 ## Samples
 
 __Half Pounders__  
-Samples were collected during ODFW’s Lower Rogue Seining Project in 2018 and 2019. The Lower Rogue Seining Project estimates escapement for Coho, late-run summer steelhead, half-pounder steelhead and fall chinook by beach seining near Huntley Park at approximate river mile 8, three times weekly from July through October. Half-pounder steelhead were identified as individuals with fork length 250 - 410mm and sampled in batches of up to 50 fish each day for 11 days from September 7th to October 1st 2018 totaling 384 individuals and 18 days from August 14th to September 25th 2019 totaling 331 individuals. Caudal fin clips were taken for DNA extraction, and placed in daily batch vials containing 95% ethanol. Note that due to batch collection of fin clips, that these numbers are inflated (some individuals have multiple tissue samples - identified later and filtered) 
+Samples were collected during ODFW’s Lower Rogue Seining Project in 2018 and 2019. The Lower Rogue Seining Project estimates escapement for Coho, late-summer run O. mykiss, half-pounder O. mykiss and fall chinook by beach seining near Huntley Park at approximate river mile 8, three times weekly from July through October. Half-pounder O. mykiss were identified as individuals with fork length 250 - 410mm and sampled in batches of up to 50 fish each day for 11 days from September 7th to October 1st 2018 totaling 384 individuals and 18 days from August 14th to September 25th 2019 totaling 331 individuals. Caudal fin clips were taken for DNA extraction, and placed in daily batch vials containing 95% ethanol. Note that due to batch collection of fin clips, that these numbers are inflated (some individuals have multiple tissue samples - identified later and filtered) 
+
+All half-pounders are non-marked and assumed to be natural origin fish.
 
 Also ~5% of samples represented twice in GTseq library as QAQC samples
 
 __Adults__  
 For brevity and easy code comprehension, throughout the notebook early-summer run steelhead are referred to as summer run and late-summer run steelhead are referred to as fall run.
 
-45 winter and 45 early-run summer run fish. Adult summer steelhead were sampled at the Cole River Hatchery sorting pond on 6/26/2019 and (b) adult winter steelhead were sampled at Cole Rivers Hatchery (Rogue River) and the Applegate River from adult brood stock for 2019. Finally 166 additional late-run summer fish (fall run) were sampled at the Huntley Park seine on the lower Rogue.
+45 winter and 45 early-run summer run fish. Adult summer steelhead were sampled at the Cole River Hatchery sorting pond on 6/26/2019 and (b) adult winter steelhead were sampled at Cole Rivers Hatchery (Rogue River) and the Applegate River from adult brood stock for 2019. Finally 166 additional late-summer run fish (fall run) were sampled at the Huntley Park seine on the lower Rogue.
+
+All late-summer run adults are unmarked and assumed to natural origin fish. Winter run fish include NOR and HOR fish. After filtering the final dataset contains 18 HOR and 22 NOR fish. Early summer run fish are all unmarked and assumed NOR.
 
 ## Genotype Data
 
@@ -66,6 +70,33 @@ kable(genos_2.2 %>%
   group_by(run, year) %>%
   tally(), caption = "Final Filtered Dataset")
 ```
+
+
+## Marker info
+
+Throughout the notebook we refer to subsets of markers based on annotations provided by CRITFC. To my knowledge these annotations come from decisions made when the panel was assembled and edited (i.e. a run timing associated marker came out of a GWAS fro run timing). Broadly we examine 4 subsets of markers:  
+
+(1) All markers: all 390 GTseq markers available in the full SFGL O mykiss GTseq panel. (The dataset here has fewer markers due to filtering - see genotyping notebook) (355 markers) 
+(2) Neutral Markers: Any markers annotated as "neutral," with no other annotations. From my understanding these were mostly selected from broad spatial scale RADseq studies that refelct broad scale geographic structure and may or may not be in linkage with unkownn adaptive loci. (226 markers) 
+(3) Adaptive Markers: any markers with a known adaptive functional annotation. (129 markers)   
+(4) Run-timing markers: a subset of adaptive markers with specific associations with run-timing in O. mykiss. (14 markers) 
+
+The table below demonstrates the annotations 
+
+```{r}
+marker_mapping <- readxl::read_xlsx("./metadata/final_mapping_results.xlsx", sheet = 1)
+
+marker_summary <- marker_mapping %>%
+  mutate(marker = str_replace(marker, "Omy(\\d+)", "Chr\\1")) %>%
+  filter(marker %in% colnames(genos_2.2)) %>%
+  mutate(neutral = if_else(str_detect(`Presumed Type`, 'neutral|Neutral'), "neutral", "adaptive")) %>%
+  mutate(run_timing = if_else(str_detect(`Presumed Type`, 'run|Run'), "run_timing", "non-run_timing")) %>%
+  dplyr::select(marker, chr, start, 'Presumed Type', neutral, run_timing, Source)
+
+DT::datatable(marker_summary, options = list(pageLength=10))
+```
+
+
 
 
 # Workflow
@@ -207,7 +238,7 @@ d <- t.test(summary(chr28_seppop$Winter)$Hexp, summary(neutral_seppop$Winter)$He
 #now make a nice table
 df <- as.data.frame(cbind(c("fall", "half", "summer", "winter"),c(a$p.value,b$p.value,c$p.value,d$p.value)))
 colnames(df) <- c("pop", "p-val")
-kable(df, caption = "T-test p-value for difference Ho vs He at run timing markers")
+kable(df, caption = "T-test p-value for difference He at run timing markers vs neutral markers")
 
 ```
 
@@ -1091,3 +1122,58 @@ The results as presented here leave us with something of a problem, if field stu
 
 __Proportions__  
 do the assignment proportions in half pounder and fall run fish match with the run counts for the appropriately matched year?
+
+__pattern within fall__
+we have dates for approximate freshwater entry for the fall run fish. is there a correlation in the winter-vs-summer genetic axis and date of entry? there is substantial overlap in the entry timing of fish referred to as winter and late-summer run, and substantial interannual variation in the peak of run timing within a group, taken together this suggests that some late late-summer fish could instead be early-arriving winter run fish. this would show up as a correlation between run timing genotype and arrival date with the fall fish. let's check real quick
+
+
+```{r, message=FALSE, warning=FALSE}
+#intake files
+half_2018_intake <- readxl::read_xlsx("../meta_data/2018_halfpounder/OmyJC18ROGR_STHP Intake form Spread sheet.xlsx", sheet = 3)
+half_2019_intake <- readxl::read_xlsx("../meta_data/2019_halfpounder/STHP Intake form Spread sheet 2019.xlsx", sheet = 1)
+fall_intake <- readxl::read_xlsx("../meta_data/2019_fall/Rogue Adult Summer and Winter (06 11 20).xlsx", sheet = 1)
+summer_intake <- readxl::read_xlsx("../meta_data/2019_summer/Omy Rogue2019 steelhead datasheets.xlsx", sheet = 2)
+winter_intake <- readxl::read_xlsx("../meta_data/2019_winter/StW Scales for DNA (06 17 19).xlsx", sheet = 3)
+
+#merge intakes
+# first clean them up a bit to make merging easier
+half_2018_intake <- half_2018_intake[,c(1,6)]
+colnames(half_2018_intake)[1] <- "ID"
+half_2018_intake$run <- "halfpounder"
+half_2018_intake$year <- "2018"
+colnames(half_2018_intake) <- c("ID", "Date", "run", "year")
+
+half_2019_intake <- half_2019_intake[,c(1,2)]
+half_2019_intake$run <- "halfpounder"
+half_2019_intake$year <- "2019"
+colnames(half_2019_intake) <- c("ID", "Date", "run", "year")
+
+summer_intake <- summer_intake[,c(2,3,6)]
+colnames(summer_intake) <- c("ID", "Date", "run")
+summer_intake$year <- "2019"
+
+winter_intake <- winter_intake[,c(2,3,7)]
+colnames(winter_intake) <- c("ID", "Date", "run")
+winter_intake$year <- "2019"
+
+fall_intake <- subset(fall_intake, Run == "Summer")
+fall_intake <- fall_intake[,c(1,3,6)]
+colnames(fall_intake) <- c("ID", "Date", "run")
+fall_intake$run <- "fall"
+fall_intake$year <- "2019"
+
+meta_data <- bind_rows(half_2018_intake, half_2019_intake, fall_intake, winter_intake, summer_intake)
+
+cor_data <- meta_data %>%
+  right_join(ld1_2, by = c("ID" = "sample" ))
+
+ggplot(cor_data[cor_data$run=="fall",])+geom_point(aes(Date,LD1))+theme_classic()+geom_smooth(aes(Date,LD1), method = "lm")
+
+cor_data$jdate <- format(as.POSIXlt(cor_data$Date, format = "%y-%m-%d"), "%j")
+
+
+summary(lm(LD1~as.numeric(jdate), data=cor_data[cor_data$run=="fall",]))
+
+```
+
+There is a significant, but minor trend (r2 = 0.03, p = 0.04) towards more genetically winter-like fish over time among fall run fish. 
