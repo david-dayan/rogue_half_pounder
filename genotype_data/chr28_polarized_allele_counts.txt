@@ -1,0 +1,7 @@
+allele counts for Gtseq markers near the greb1L/rock1 region
+
+"alleles are polarized towards the winter-like allele from this population. i.e. the major allele in the winter run samples is being counted, a higher score represents a more winter-like genotype, with 0 a summer like homozygote, 1 is heterozygote and 2 is winter0like heterozygote"
+
+bold markers are strongly weighted in the DAPC separating winter from summer run
+
+markers are in chromosomal order

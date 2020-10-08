@@ -873,7 +873,7 @@ CIs <- ld1 %>%
 #number of half pounders that fall in the 95% credible interval for winter fish assignment
 kable(ld1 %>%
   filter(pop == "halfpounder") %>%
-  summarise(winter_assigned = sum((LD1 < CIs$hiCI[4] & LD1 > CIs$loCI[4])), summer_assigned = sum((LD1 < CIs$hiCI[3] & LD1 > CIs$loCI[3])), unassigned = sum((LD1 < CIs$loCI[3] & LD1 > CIs$hiCI[4])) ), caption = "True Classifier - Half Pounders")
+  summarise(winter_assigned = sum((LD1 < CIs$hiCI[4])), summer_assigned = sum(( LD1 > CIs$loCI[3])), unassigned = sum((LD1 <= CIs$loCI[3] & LD1 >= CIs$hiCI[4])) ), caption = "True Classifier - Half Pounders")
 
 # assignments using original DAPC
 CIs <- ld1_2 %>%
@@ -884,7 +884,7 @@ CIs <- ld1_2 %>%
 #number of half pounders that fall in the 95% credible interval for winter fish assignment
 kable(ld1_2 %>%
   filter(pop == "halfpounder") %>%
-  summarise(winter_assigned = sum((LD1 < CIs$hiCI[4] & LD1 > CIs$loCI[4])), summer_assigned = sum((LD1 < CIs$hiCI[3] & LD1 > CIs$loCI[3])), unassigned = sum((LD1 < CIs$loCI[3] & LD1 > CIs$hiCI[4])) ), caption = "A priori DAPC - Half Pounders")
+  summarise(winter_assigned = sum((LD1 < CIs$hiCI[4])), summer_assigned = sum(( LD1 > CIs$loCI[3])), unassigned = sum((LD1 <= CIs$loCI[3] & LD1 >= CIs$hiCI[4])) ), caption = "A priori DAPC - Half Pounders")
 
 
 #same as above but for fall fish
@@ -897,7 +897,7 @@ CIs <- ld1 %>%
 #number of half pounders that fall in the 95% credible interval for winter fish assignment
 kable(ld1 %>%
   filter(pop == "fall") %>%
-  summarise(winter_assigned = sum((LD1 < CIs$hiCI[4] & LD1 > CIs$loCI[4])), summer_assigned = sum((LD1 < CIs$hiCI[3] & LD1 > CIs$loCI[3])), unassigned = sum((LD1 < CIs$loCI[3] & LD1 > CIs$hiCI[4])) ), caption = "True Classifier - Fall Run")
+  summarise(winter_assigned = sum((LD1 < CIs$hiCI[4])), summer_assigned = sum((LD1 > CIs$loCI[3])), unassigned = sum((LD1 <= CIs$loCI[3] & LD1 >= CIs$hiCI[4])) ), caption = "True Classifier - Fall Run")
 
 # assignments using original DAPC
 CIs <- ld1_2 %>%
@@ -908,12 +908,12 @@ CIs <- ld1_2 %>%
 #number of half pounders that fall in the 95% credible interval for winter fish assignment
 kable(ld1_2 %>%
   filter(pop == "fall") %>%
-  summarise(winter_assigned = sum((LD1 < CIs$hiCI[4] & LD1 > CIs$loCI[4])), summer_assigned = sum((LD1 < CIs$hiCI[3] & LD1 > CIs$loCI[3])), unassigned = sum((LD1 < CIs$loCI[3] & LD1 > CIs$hiCI[4])) ), caption = "A priori DAPC - Fall Run")
+  summarise(winter_assigned = sum((LD1 < CIs$hiCI[4])), summer_assigned = sum((LD1 > CIs$loCI[3])), unassigned = sum((LD1 <= CIs$loCI[3] & LD1 >= CIs$hiCI[4])) ), caption = "A priori DAPC - Fall Run")
 
 
 ```
 
-When we use the original DAPC _(not the classifier, still need to make a decision here)_ we attempt to classify fish into winter or summer like using the first DA which accounts for ~80% of the among group variance and is driven almost exclusively by known run timing associated markers. We then draw 95% credible intervals for winter and summer run and count how many fall and half pounder fish fall into these intervals. For fall fish, the majority  are winter assigned, nearly as many are unassigned and a small portion are summer assignmed. The same pattern is observed among the half pounders, but ratio number of unassigned fish is somewhat lower.
+When we use the original DAPC _(not the classifier, still need to make a decision here)_ we attempt to classify fish into winter or summer like using the first DA which accounts for ~80% of the among group variance and is driven almost exclusively by known run timing associated markers. We then draw 95% credible intervals for winter and summer run and count how many fall and half pounder fish fall beyond the lower bounds for these intervals (i.e. at least as winter-like or summer-like as the 95% CI). For fall fish, the majority  are winter assigned, nearly as many are unassigned and a small portion are summer assignmed. The same pattern is observed among the half pounders, but ratio number of unassigned fish is somewhat lower.
 
 
 ### Neutral DAPC
@@ -1052,7 +1052,7 @@ colnames(tmat) <- run_timing_maf$marker
 pheatmap(tmat)
 ```
 
-Of the 14 markers with known run-timing associations, 10 are fixed or nearly fixed for alternative alleles in winter and summer run fish. Fall run fish and half pounder demonstrate intermediate genotypes and very little differentiation from one another.
+Of the 14 markers with known run-timing associations, 9 are fixed or nearly fixed for alternative alleles in winter and summer run fish. One additional marker (greb1_05) is highly informative, but is not fixed in winter run fish. Fall run fish and half pounder demonstrate intermediate genotypes and very little differentiation from one another.
 
 
 ```{r, eval=FALSE, include=FALSE}
@@ -1064,6 +1064,484 @@ tmat <- t(as.matrix(da1_maf[,1:4]))
 colnames(tmat) <- da1_maf$marker
 pheatmap(tmat)
 ```
+
+### More heatmaps
+
+Sometimes it can be helpful to look at the pattern across individuals and along the genome rather than allele frequency. Below we make a graphical representation of some of the genotypes at run timing associated markers as well. 
+
+```{r}
+#first we need to get a dataset that will work
+
+#the tab slot of the adegenet object will work if we polarize the data by selecting the allele with the higher count in either winter or early summer
+
+#for each pair of columns, keep the one with the highest average, few enough markers, we can just choose these manually
+colSums(chr28_seppop$Winter$tab, na.rm = TRUE)
+
+#bind these together
+polarized_allele_counts <- as.data.frame(chr28_seppop$Winter$tab[,c(1,4,5,8,10,12,14,16,18,19,22,23,25,28)]) %>%
+  bind_rows(as.data.frame(chr28_seppop$Summer$tab[,c(1,4,5,8,10,12,14,16,18,19,22,23,25,28)])) %>%
+  bind_rows(as.data.frame(chr28_seppop$fall$tab[,c(1,4,5,8,10,12,14,16,18,19,22,23,25,28)])) %>%
+  bind_rows(as.data.frame(chr28_seppop$halfpounder$tab[,c(1,4,5,8,10,12,14,16,18,19,22,23,25,28)]))
+
+
+#plot heatmap
+
+#first, order the markers according to genomic position
+map_results <- readxl::read_xlsx("metadata/final_mapping_results.xlsx", sheet = 1)
+map_results <- map_results %>%
+  mutate(marker = str_replace(marker, "Omy28", "Chr28"))
+
+colnames(polarized_allele_counts) <- substr(colnames(polarized_allele_counts), 0, nchar(colnames(polarized_allele_counts))-2)
+
+marker_pos <- map_results %>%
+  select(marker, CRITFC_SNP_pos_genome) %>%
+  filter(marker %in% colnames(polarized_allele_counts))
+
+#hmm one marker position is missing, just add it manually
+marker_pos$CRITFC_SNP_pos_genome <- as.numeric(marker_pos$CRITFC_SNP_pos_genome)
+marker_pos[14,2] <- 11702210
+
+#order to columns
+polarized_allele_counts <- polarized_allele_counts %>%
+  select(unlist(c(marker_pos[order(marker_pos$CRITFC_SNP_pos_genome),1]), use.names = FALSE))
+#add pop info
+polarized_allele_counts$pop <- c(rep("winter", nrow(chr28_seppop$Winter$tab)), rep("summer", nrow(chr28_seppop$Summer$tab)), rep("fall", nrow(chr28_seppop$fall$tab)), rep("halfpounder", nrow(chr28_seppop$halfpounder$tab)))
+
+#split into groups for easy visualization
+winter_pac <- filter(polarized_allele_counts, pop == "winter")
+summer_pac <- filter(polarized_allele_counts, pop == "summer")
+fall_pac <- filter(polarized_allele_counts, pop == "fall")
+halfpounder_pac <- filter(polarized_allele_counts, pop == "halfpounder")
+
+a = pheatmap(winter_pac[,-15], cluster_cols = FALSE, show_rownames = FALSE, main = "winter")
+b = pheatmap(summer_pac[,-15], cluster_cols = FALSE, show_rownames = FALSE, main = "summer")
+c = pheatmap(fall_pac[,-15], cluster_cols = FALSE, show_rownames = FALSE, main = "fall")
+d = pheatmap(halfpounder_pac[,-15], cluster_cols = FALSE, show_rownames = FALSE, main = "halfpounder")
+
+```
+
+
+
+
+# LD
+
+
+Quick LD plot using r(bar)D of winter and summer runs (first plot) vs fall and half pounder (second) plot. Will come back and clean this up later. Absence of variation within some runs is causing code to break for plotting and estimating LD in a lot of packages. If we want formal LD, I think I'll need to manually convert to a plink or vcf format and estimate D or r2 with plink/tassel or other
+.
+```{r, cache=TRUE, message=FALSE, warning=FALSE}
+chr28_genind <- genind_2.0[loc = run_timing_loci_names]
+
+# first lets calculate LD (dartR has a great (fast) ld estimator that works right on genind files, so let's use this)
+#ldreport_winter <- dartR::gl.report.ld(chr28_genind[pop = c("Summer", "Winter")], name = NULL, save = FALSE )
+#ldreport_fall <- dartR::gl.report.ld(chr28_genind[pop = c("fall", "halfpounder")], name = NULL, save = FALSE )
+
+#this command is breaking when running on the subset datasets (no variance to do the calcs on), lets settle on poppr's tools for now (eventually will need a better LD estimate)
+
+poppr::pair.ia(chr28_genind[pop = c("Summer", "Winter")], limits = c(-0.1, 1.1))
+poppr::pair.ia(chr28_genind[pop = c("fall", "halfpounder")], limits = c(-0.1, 1.1))
+
+
+```
+
+Yes, LD is weaker among fall and half pounder than winter/summer
+
+# haplotypes
+
+The identification of "discordant" genotypes at markers in the region on chromosome 28 associated with run timing (i.e. winter and summer run fish demonstrate near perfect linkage among markers in this region, but fall and halfpounders demonstrate reduced LD), suggests that recombination can occur within this region. If we can phase our data we should be able to identify chr28 haplotypes to gain more inference into the evolutionary origin/maintenance of fall/halfpounders.
+
+__Outline:__  
+- identify snps in linkage around chr28 and chr05  
+- phase genotypes for these snps  
+- cluster phased genos to identify haplogroups and/or build haplotype network to visualize relationships and visually identify clusters  
+
+## phasing
+
+First we need to get phased genotypic data in order to identify haplotypes.  
+
+We will use fastPHASE. First lets get data in the fastphase format
+
+```{r, eval = FALSE}
+# the fast phase format's genotype data for an individual is expressed on two rows with each row representing an unphased haploid genotype. There is also some metadata added into header rows. the main gt matrix  is very similar to the structure format so we'll use the same approach to reformat the data as we used to convert from genind to structure
+
+chr28_genind <- genind_2.0[loc=run_timing_loci_names]
+
+#note just sort of crashed through this with a text editor, not easily logged, but the general idea was transpose the data, split columns (diploid to dual haploid by adding a tab between the values), then convert N to ?, then read the result into R and transpose again
+
+df <- genind2df(chr28_genind)
+
+#reorder to chromosomal order here
+#first, order the markers according to genomic position
+map_results <- readxl::read_xlsx("metadata/final_mapping_results.xlsx", sheet = 1)
+map_results <- map_results %>%
+  mutate(marker = str_replace(marker, "Omy28", "Chr28"))
+
+marker_pos <- map_results %>%
+  select(marker, CRITFC_SNP_pos_genome) %>%
+  filter(marker %in% colnames(df))
+
+#hmm one marker position is missing, just add it manually
+marker_pos$CRITFC_SNP_pos_genome <- as.numeric(marker_pos$CRITFC_SNP_pos_genome)
+marker_pos[14,2] <- 11702210
+
+#order to columns
+df <- df %>%
+  select(unlist(c(marker_pos[order(marker_pos$CRITFC_SNP_pos_genome),1]), use.names = FALSE))
+
+# now transponse and save
+df <- as.data.frame(t(df))
+write_tsv(df, "genotype_data/chr28.tmp")
+
+#in text editor, convert NA to ??, then split columns
+df <- read_tsv("genotype_data/chr28.tmp", col_names = FALSE)
+df <- t(df)
+write_tsv(as.data.frame(df), "genotype_data/chr28.fastphase", col_names = FALSE)
+
+#next we remove whitespaces from the genos and label the individuals like so:
+# #individual 1 name
+# TAGCG...
+# TAGCC...
+# #individual 2 name
+# TAGCG...
+# TAGCC...
+
+# this was accomplished by removing all the whitespace in the genos then using the following regex in find and replace
+# find: ^(\w+)\t([A-Z?]+)\n^(\w+)\t([A-Z?]+)
+# replace: # \1\n\2\n\4
+
+#then we added the header info according to the fastphase manual
+# snp pos was taken from the critfc mapping data and manually added to the file
+
+```
+
+fastphase was run using default setting and attempting to minimize the switch error (Add more details on this for eventual methods)
+```{bash, eval=FALSE}
+ ~/Science/programs/fastPHASE  ../genotype_data/chr28.fastphase
+```
+
+
+
+## haplotype network
+
+Here we will examine the diversity and putative evolutionary history of the haplotypes.
+
+```{r, message=FALSE, warning=FALSE}
+ph_geno <- read_tsv("phasing/phased_genos2_r.txt")
+```
+
+First lets collect some summary info:
+
+```{r}
+ph_geno <- genos_2.2 %>%
+  select(Sample, run) %>%
+  left_join(ph_geno, by = c("Sample" = "ind"))
+
+ph_geno %>%
+  group_by(run) %>% 
+  summarise(count = n_distinct(hap))
+
+#write_tsv(ph_geno, "phasing/phased_genos_run.txt")
+
+```
+
+There are 2 unique haplotypes in summer sample, 9 in winter, 44 in fall and 73 in halfpounders. There are 84 total unique haplotypes. 
+
+We constructed a haplotype network using the minimum spanning approach in Popart v1.7 (also tried to use pegas, but data import and conversion kept unphasing the data or and scrambling the sample ids across the different haplotypes)
+
+Below is the minimum spanning network of the 84 different haplotypes among greb1l region SNPS inferred using fastphase and popart (msn)
+
+```{r}
+knitr::include_graphics('phasing/phased_genos2.phylip.svg')
+```
+
+
+
+```{r, eval = FALSE}
+# didn't use any of this because row ids and haplotype assignments keep getting scrambled and producing misleading results
+
+phased_loci <- read.loci("phasing/phased_genos_run.txt", header = FALSE, col.pop = 1, col.loci = 2:15)
+haps <- haplotype(phased_loci, check.phase = TRUE, )
+net <- haploNet(haps)
+
+# structure -> df -> haplotype
+phased_loci <- read.structure("phasing/phased_genos_run.stru", n.ind = 882, n.loc = 14, onerowperind = FALSE, col.pop = 1, col.lab = 0, col.others = 0, row.marknames = 0)
+#phased_loci <- alleles2loci(phased_loci$tab,  phased = TRUE)
+df <- genind2df(phased_loci)
+h <- haplotype(as.matrix(df))
+hn <- haploNet(h)
+plot(hn, fast = FALSE)
+#seems like phasing is getting lost in here somewhere because there are only 88 unique haps in the raw data
+
+# this approach (below) works, but it keeps the haplotypes as characters making the distance calculation inappropriate
+phased_loci <- read_tsv("phasing/phased_genos_run.txt")
+hap <- haplotype(as.matrix(phased_loci[,-1]))
+hap <- sort(hap, what = "labels")
+dst <- dist.dna(hap)
+dst2 <- dist
+tree <- rmst(dst)
+
+ind.hap<-with(
+    stack(setNames(attr(hap, "index"), row.names(hap))), 
+    table(hap=ind, pop=phased_loci$pop)
+)
+
+plot(tree, size=attr(tree, "weight"), scale.ratio = 10, labels= FALSE)
+
+plot(tree, size=attr(tree, "weight"), scale.ratio = 100, cex = 0.8, pie=ind.hap, labels = F)
+legend(50,50,colnames(ind.hap), col=rainbow(ncol(ind.hap)), pch=20)
+
+#
+hn2 <- haploNet(hap)
+
+countHap <- function(hapl = hap, dna = phased_loci){
+    with(
+        stack(setNames(attr(hapl, "index"), rownames(hapl))),
+        table(hapl = ind, pop = dna$pop)
+    )
+}
+
+
+countHap()
+plot(hn2, pie = countHap(), size = attr(hn2, "freq"), labels= F, scale.ratio = 100 )
+legend(50,50,colnames(countHap()), col=rainbow(ncol(countHap())), pch=20)
+
+
+
+
+```
+
+## haplotype plots
+
+```{r, message=FALSE, warning=FALSE}
+phased_genos <- read_tsv("phasing/phased_genos_run.txt")
+
+#polarize to winter (find the most common allele in winter convert to 1, then convert alternative allele to 0)
+
+#gather the alleles for winter
+phased_genos %>%
+  filter(run == "Winter") %>%
+  count(Chr28_11667578, Omy_GREB1_09, Chr28_11607954, Omy_GREB1_05, Chr28_11625241, Chr28_11632591, Chr28_11658853, `Omy_RAD47080-54`, `Omy_RAD15709-53`, Chr28_11671116, Chr28_11676622, Chr28_11683204, Chr28_11773194, Chr28_11702210) %>%
+  slice(which.max(n))
+
+#convert to polarized counts
+phased_genos <- phased_genos %>%
+  mutate(Chr28_11667578 = if_else(Chr28_11667578 == "C", 1, 0)) %>%
+  mutate(Omy_GREB1_09 = if_else(Omy_GREB1_09 == "G", 1, 0)) %>%
+  mutate(Chr28_11607954 = if_else(Chr28_11607954 == "G", 1, 0)) %>%
+  mutate(Omy_GREB1_05 = if_else(Omy_GREB1_05 == "G", 1, 0)) %>%
+  mutate(Chr28_11625241 = if_else(Chr28_11625241 == "G", 1, 0)) %>%
+  mutate(Chr28_11632591 = if_else(Chr28_11632591 == "G", 1, 0)) %>%
+  mutate(Chr28_11658853 = if_else(Chr28_11658853 == "C", 1, 0)) %>%
+  mutate(`Omy_RAD47080-54` = if_else(`Omy_RAD47080-54` == "G", 1, 0)) %>%
+  mutate(`Omy_RAD15709-53` = if_else(`Omy_RAD15709-53` == "G", 1, 0)) %>%
+  mutate(Chr28_11671116 = if_else(Chr28_11671116 == "T", 1, 0)) %>%
+  mutate(Chr28_11676622 = if_else(Chr28_11676622 == "G", 1, 0)) %>%
+  mutate(Chr28_11683204 = if_else(Chr28_11683204 == "T", 1, 0)) %>%
+  mutate(Chr28_11773194 = if_else(Chr28_11773194 == "A", 1, 0)) %>%
+  mutate(Chr28_11702210 = if_else(Chr28_11702210 == "G", 1, 0)) 
+
+#lets get rid of the markers that are not diagnostic or heaviliy weighted in the a priori DAPC
+
+#phased_genos <- phased_genos %>%
+# select(-one_of(c("Chr28_11607954","Omy_GREB1_09", "Chr28_11632591", "Chr28_11773194")))
+
+
+winter_pac <- filter(phased_genos, run == "Winter")
+summer_pac <- filter(phased_genos, run == "Summer")
+fall_pac <- filter(phased_genos, run == "fall")
+halfpounder_pac <- filter(phased_genos, run == "halfpounder")
+
+a = pheatmap(winter_pac[,-c(1,2)], cluster_cols = FALSE, show_rownames = FALSE, main = "winter")
+b = pheatmap(summer_pac[,-c(1,2)], cluster_cols = FALSE, show_rownames = FALSE, main = "summer")
+c = pheatmap(fall_pac[,-c(1,2)], cluster_cols = FALSE, show_rownames = FALSE, main = "fall")
+d = pheatmap(halfpounder_pac[,-c(1,2)], cluster_cols = FALSE, show_rownames = FALSE, main = "halfpounder")
+
+#now without the uninformative markers (i.e. only keep diagnostic + greb05)
+
+phased_genos <- phased_genos %>%
+ select(-one_of(c("Chr28_11607954","Omy_GREB1_09", "Chr28_11632591", "Chr28_11773194")))
+
+winter_pac <- filter(phased_genos, run == "Winter")
+summer_pac <- filter(phased_genos, run == "Summer")
+fall_pac <- filter(phased_genos, run == "fall")
+halfpounder_pac <- filter(phased_genos, run == "halfpounder")
+
+a = pheatmap(winter_pac[,-c(1,2)], cluster_cols = FALSE, show_rownames = FALSE, main = "winter")
+#b = pheatmap(summer_pac[,-c(1,2)], cluster_cols = FALSE, show_rownames = FALSE, main = "summer")
+c = pheatmap(fall_pac[,-c(1,2)], cluster_cols = FALSE, show_rownames = FALSE, main = "fall")
+d = pheatmap(halfpounder_pac[,-c(1,2)], cluster_cols = FALSE, show_rownames = FALSE, main = "halfpounder")
+
+```
+
+
+Next let's make some publication quality figures that more clearly express what is going on here. Goals: separate run types, within fall and half pounders separate into assignments groups, so that we can examine what types of haplotypes contribute to each, also within each plot make sure it is clustered 
+
+
+```{r}
+#prepackaged heatmap tools are unlikely to work well given all the weird things we want to do, so lets just build our own ggplot output
+
+#get assignment results
+
+# first get the assignments
+ld1_2 <- as.data.frame(dapc_full_apriori$ind.coord) %>%
+  rownames_to_column(var="sample") %>%
+  left_join(pops_info)
+
+# assignments using original DAPC
+CIs <- ld1_2 %>%
+  group_by(pop) %>%
+  summarise(loCI = quantile(LD1, probs = 0.025),
+            hiCI = quantile(LD1, probs = 0.975))
+
+#number of half pounders that fall in the 95% credible interval for winter fish assignment
+assn <- ld1_2 %>%
+  mutate(assignment = case_when(
+    LD1 < CIs$hiCI[4]  ~ "winter", 
+    LD1 > CIs$loCI[3] ~ "summer", 
+    LD1 <= CIs$loCI[3] & LD1 >= CIs$hiCI[4] ~ "unassigned")) %>%
+  select(sample, assignment)
+
+
+#split the halfpounders and fall into groups by assignment
+half_fall_ph <- phased_genos %>%
+  filter(run == "halfpounder" | run == "fall") %>%
+  left_join(assn)
+
+fall_w <- half_fall_ph %>%
+  filter(run == "fall" & assignment == "winter")
+
+fall_s <- half_fall_ph %>%
+  filter(run == "fall" & assignment == "summer")
+
+fall_u <- half_fall_ph %>%
+  filter(run == "fall" & assignment == "unassigned")
+
+halfpounder_w <- half_fall_ph %>%
+  filter(run == "halfpounder" & assignment == "winter")
+
+halfpounder_s <- half_fall_ph %>%
+  filter(run == "halfpounder" & assignment == "summer")
+
+halfpounder_u <- half_fall_ph %>%
+  filter(run == "halfpounder" & assignment == "unassigned")
+
+
+# get by group clustering results
+require(ggdendro)
+dendro_winter <- as.dendrogram(hclust(d = dist(winter_pac[,-c(1,2)])))
+dendro_summer <- as.dendrogram(hclust(d = dist(summer_pac[,-c(1,2)])))
+dendro_fall_w <- as.dendrogram(hclust(d = dist(fall_w[,-c(1,2,13)])))
+dendro_fall_s <- as.dendrogram(hclust(d = dist(fall_s[,-c(1,2,13)])))
+dendro_fall_u <- as.dendrogram(hclust(d = dist(fall_u[,-c(1,2,13)])))
+dendro_halfpounder_w <- as.dendrogram(hclust(d = dist(halfpounder_w[,-c(1,2,13)])))
+dendro_halfpounder_s <- as.dendrogram(hclust(d = dist(halfpounder_s[,-c(1,2,13)])))
+dendro_halfpounder_u <- as.dendrogram(hclust(d = dist(halfpounder_u[,-c(1,2,13)])))
+
+#reorder into dendro orders
+winter_pac <- rowid_to_column(winter_pac, "row_id")
+summer_pac <- rowid_to_column(summer_pac, "row_id")
+fall_w <- rowid_to_column(fall_w, "row_id")
+fall_s <- rowid_to_column(fall_s, "row_id")
+fall_u <- rowid_to_column(fall_u, "row_id")
+halfpounder_w <- rowid_to_column(halfpounder_w, "row_id")
+halfpounder_s <- rowid_to_column(halfpounder_s, "row_id")
+halfpounder_u <- rowid_to_column(halfpounder_u, "row_id")
+
+
+# convert to long format, with dendrogram order
+long_winter <- winter_pac %>%
+  pivot_longer(cols = !(c("run", "sample", "row_id")) ,names_to = "snp", values_to = "allele_count") %>%
+  mutate(row_id = factor(row_id, levels=unique(winter_pac$row_id[order.dendrogram(dendro_winter)]), ordered = TRUE)) %>%
+  mutate(snp = factor(snp, levels = c("Omy_GREB1_05", "Chr28_11625241", "Chr28_11658853", "Chr28_11667578", "Omy_RAD47080-54", "Omy_RAD15709-53", "Chr28_11671116", "Chr28_11676622", "Chr28_11683204", "Chr28_11702210"), ordered = TRUE))
+
+long_summer <- summer_pac %>%
+  pivot_longer(cols = !(c("run", "sample", "row_id")) ,names_to = "snp", values_to = "allele_count") %>%
+  mutate(row_id = factor(row_id, levels=unique(summer_pac$row_id[order.dendrogram(dendro_summer)]), ordered = TRUE)) %>%
+  mutate(snp = factor(snp, levels = c("Omy_GREB1_05", "Chr28_11625241", "Chr28_11658853", "Chr28_11667578", "Omy_RAD47080-54", "Omy_RAD15709-53", "Chr28_11671116", "Chr28_11676622", "Chr28_11683204", "Chr28_11702210"), ordered = TRUE))
+
+long_fall_w <- fall_w %>%
+  pivot_longer(cols = !(c("run", "sample", "row_id", "assignment")) ,names_to = "snp", values_to = "allele_count") %>%
+  mutate(row_id = factor(row_id, levels=unique(fall_w$row_id[order.dendrogram(dendro_fall_w)]), ordered = TRUE)) %>%
+  mutate(snp = factor(snp, levels = c("Omy_GREB1_05", "Chr28_11625241", "Chr28_11658853", "Chr28_11667578", "Omy_RAD47080-54", "Omy_RAD15709-53", "Chr28_11671116", "Chr28_11676622", "Chr28_11683204", "Chr28_11702210"), ordered = TRUE))
+
+long_fall_s <- fall_s %>%
+  pivot_longer(cols = !(c("run", "sample", "row_id", "assignment")) ,names_to = "snp", values_to = "allele_count") %>%
+  mutate(row_id = factor(row_id, levels=unique(fall_s$row_id[order.dendrogram(dendro_fall_s)]), ordered = TRUE)) %>%
+  mutate(snp = factor(snp, levels = c("Omy_GREB1_05", "Chr28_11625241", "Chr28_11658853", "Chr28_11667578", "Omy_RAD47080-54", "Omy_RAD15709-53", "Chr28_11671116", "Chr28_11676622", "Chr28_11683204", "Chr28_11702210"), ordered = TRUE))
+
+long_fall_u <- fall_u %>%
+  pivot_longer(cols = !(c("run", "sample", "row_id", "assignment")) ,names_to = "snp", values_to = "allele_count") %>%
+  mutate(row_id = factor(row_id, levels=unique(fall_u$row_id[order.dendrogram(dendro_fall_u)]), ordered = TRUE)) %>%
+  mutate(snp = factor(snp, levels = c("Omy_GREB1_05", "Chr28_11625241", "Chr28_11658853", "Chr28_11667578", "Omy_RAD47080-54", "Omy_RAD15709-53", "Chr28_11671116", "Chr28_11676622", "Chr28_11683204", "Chr28_11702210"), ordered = TRUE))
+
+long_half_u <- halfpounder_u %>%
+  pivot_longer(cols = !(c("run", "sample", "row_id", "assignment")) ,names_to = "snp", values_to = "allele_count") %>%
+  mutate(row_id = factor(row_id, levels=unique(halfpounder_u$row_id[order.dendrogram(dendro_halfpounder_u)]), ordered = TRUE)) %>%
+  mutate(snp = factor(snp, levels = c("Omy_GREB1_05", "Chr28_11625241", "Chr28_11658853", "Chr28_11667578", "Omy_RAD47080-54", "Omy_RAD15709-53", "Chr28_11671116", "Chr28_11676622", "Chr28_11683204", "Chr28_11702210"), ordered = TRUE))
+
+long_half_w <- halfpounder_w %>%
+  pivot_longer(cols = !(c("run", "sample", "row_id", "assignment")) ,names_to = "snp", values_to = "allele_count") %>%
+  mutate(row_id = factor(row_id, levels=unique(halfpounder_w$row_id[order.dendrogram(dendro_halfpounder_w)]), ordered = TRUE)) %>%
+  mutate(snp = factor(snp, levels = c("Omy_GREB1_05", "Chr28_11625241", "Chr28_11658853", "Chr28_11667578", "Omy_RAD47080-54", "Omy_RAD15709-53", "Chr28_11671116", "Chr28_11676622", "Chr28_11683204", "Chr28_11702210"), ordered = TRUE))
+
+long_half_s <- halfpounder_s %>%
+  pivot_longer(cols = !(c("run", "sample", "row_id", "assignment")) ,names_to = "snp", values_to = "allele_count") %>%
+  mutate(row_id = factor(row_id, levels=unique(halfpounder_s$row_id[order.dendrogram(dendro_halfpounder_s)]), ordered = TRUE)) %>%
+  mutate(snp = factor(snp, levels = c("Omy_GREB1_05", "Chr28_11625241", "Chr28_11658853", "Chr28_11667578", "Omy_RAD47080-54", "Omy_RAD15709-53", "Chr28_11671116", "Chr28_11676622", "Chr28_11683204", "Chr28_11702210"), ordered = TRUE))
+
+#build heatmaps
+heatmap_w <- ggplot(data = filter(long_winter), aes(x = snp, y = row_id)) +
+  geom_tile(aes(fill = allele_count))+scale_fill_viridis_c()+theme_classic()+theme( axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank(), legend.position = "none", axis.text.x = element_blank())+ylab("Winter")
+
+heatmap_s <- ggplot(data = filter(long_summer), aes(x = snp, y = row_id)) +
+  geom_tile(aes(fill = allele_count))+theme_classic()+scale_fill_gradient(low = "#440154FF", high = "#440154FF")+theme( axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank(), legend.position = "none", axis.text.x = element_blank())+ylab("Early-Summer")
+
+heatmap_fw <- ggplot(data = filter(long_fall_w), aes(x = snp, y = row_id)) +
+  geom_tile(aes(fill = allele_count))+scale_fill_viridis_c()+theme_classic()+theme( axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank(), legend.position = "none", axis.text.x = element_blank())+ylab("Late-Summer\nWinter Assigned")
+
+heatmap_fs <- ggplot(data = filter(long_fall_s), aes(x = snp, y = row_id)) +
+  geom_tile(aes(fill = allele_count))+scale_fill_viridis_c()+theme_classic()+theme( axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank(), legend.position = "none", axis.text.x = element_blank())+ylab("Late-Summer\nEarly-Summer ssigned")
+
+heatmap_fu <- ggplot(data = filter(long_fall_u), aes(x = snp, y = row_id)) +
+  geom_tile(aes(fill = allele_count))+scale_fill_viridis_c()+theme_classic()+theme( axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank(), legend.position = "none", axis.text.x = element_blank())+ylab("Late-Summer\nUnassigned")
+
+heatmap_hw <- ggplot(data = filter(long_half_w), aes(x = snp, y = row_id)) +
+  geom_tile(aes(fill = allele_count))+scale_fill_viridis_c()+theme_classic()+theme( axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank(), legend.position = "none", axis.text.x = element_blank())+ylab("Halfpounder\nWinter Assigned")
+
+heatmap_hs <- ggplot(data = filter(long_half_s), aes(x = snp, y = row_id)) +
+  geom_tile(aes(fill = allele_count))+scale_fill_viridis_c()+theme_classic()+theme( axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank(), legend.position = "none", axis.text.x = element_blank())+ylab("Halfpounder\nSummer Assigned")
+
+heatmap_hu <- ggplot(data = filter(long_half_u), aes(x = snp, y = row_id)) +
+  geom_tile(aes(fill = allele_count))+scale_fill_viridis_c()+theme_classic()+theme(axis.text.x = element_text(angle = 90), axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank(), legend.position = "none")+ylab("Halfpounder\nUnassigned")
+
+
+#make the final plot
+require(grid)
+grid.newpage()
+print(heatmap_hu, vp = viewport(x = 0.4, y = 0.5, width = 0.8, height = 1.0))
+print(ggdendrogram(data = dendro_halfpounder_u, rotate = TRUE, labels = FALSE, leaf_labels = FALSE), vp = viewport(x = 0.90, y = 0.60, width = 0.2, height = 0.75))
+
+
+
+```
+
+
+
+## summary
+
+The density of markers in greb1L/rock1 region in our GTseq dataset allows us to identify characteristic winter and early-summer run haplotypes from our samples. if we focus on only the sites that vary strongly between winter and summer runs, there is a single summer haplotype (note there are multiple haps within this group when considering all sites, not just the diagnostic + heavily weighted ones), and two haplotypes within winter run. 
+
+summer and winter assigned halfpounder and fall run fish possess largely winter and summer run haplotypes. unassigned halfpounders and fall run fish also possess 1 copy each of winter and summer run haplotypes, suggesting many unassigned fish are first generation hybrids between winter and summer runs, however, there are also many highly recombined haplotypes among the unassigned halfpounders and fall run fish. evidence of recombination within the greb1L/rock1 region haplotypes suggests gene flow between winter and summer run fish occurs beyond first generation hybrids. however we did not observe any recombined greb1L/rock1 region haplotypes within our sample of winter and summer run fish. 
+
+this opens up a question, what spawning events allow for recombination? we propose that there may be partial temporal isolation of early-summer from winter run fish, with fall run adults serving as a bridge between the extreme distribution of run timing. indeed we also discovered a weak but significant association between DAPC DA1 score and arrival timing among fall run fish. 
+
+this absence of recombined haplotypes within winter and summer samples may reflect extreme phenotype sampling (adult samples were identified as winter and summer runs by timing of arrival at spawning grounds, taken on far ends of distribution (late winters vs early early-summers))
+
+this also calls into question what phenotype we are looking at, runs are named based on their timing of freshwater entry, but appear to also segregate at least weakly on the basis of spawning time/arrival at spawning grounds.
+
+__to continue thinking about__
+differences between halfpounder and fall haplotype results?  
+where do halfpounders come in here?
+
 
 # Discussion
 
@@ -1084,6 +1562,10 @@ Inference of structure within both fall and half-pounder fish comes from several
 
 Indeed, when we attempt to classify both half-pounder and late-summer run fish as winter-like or early-summer like using a linear combination of alleles that strongly discriminate winter and early summer run fish (discriminant axis 1), we observe a group of strongly winter-like fish, a second group of intermeditate fish and a small number of early-summer-like fish. Direct examination of genotypes at known-run timing markers reveals the same pattern.   _One caveat here that might be worth including in anything published for a wider audience: Methods like the DAPC, and even the association analyses that are the basis of the annotations for our panel, operate under an assumption of additivity. Without a clear, mechaninistic understanding of the g -> p map for run timing, we can not predict run-timing phenotypes from such heterozygous and discordant genotypes at run-timing associated markers. Variation in effect size among loci, dominance, epistasis, the effects of un-genotyped causal loci and plasticity all may be at play here._
 
+_add discussion about diagnostic vs highly weighted in DAPC and about difference in phenotypes used for annotation (CRITFC annotations are for interior pops and the phenotype is arrival timing on spawning grounds, whereas prince et al annotations are for freshwater entry)_
+
+_also add discussion about how some markers with known annotations are not diagnostic or not even informative, and this could have somehting to do with divergence in the summer haplotype as it spread (assuming a single origin)_
+
 In addition to structure within fall and half-pounders along the genetic axis differentiating early-summer and winter runs, we also identified structure within these groups driven by both neutral markers and adaptive markers, including all 5 markers in the dataset with residency-vs-anadromy annotations and a neutral annotated marker with strong residency-vs-anaadromy associations in the Klickitat River. 
 
 Taken together, we propose that both late-summer run and half-pounders are a mixed assemblage of individuals demonstrating genetic characteristics inclusive of winter-run, early-summer run and a highly heterozygous intermediate group. Also, despite mark-recapture evidence that early-summer and late-summer run adults are found together on the spawning grounds, genetic differentiation at GTseq panel markers suggests late-summer (and half-pounder) run adults are less differentiated from winter run than early-summer run adults at both neutral and adaptive regions of the genome.
@@ -1100,6 +1582,8 @@ How is it possible to have intermediate MAFs within the Ch28 region at a small s
 - checked out the genotyping plots for these markers, nothing looks out of whack. however, Omy_GREB1_09 is a poorly mapping marker by both SFGL and CRITFC mapping results.  
 
 Should also think about whether or not the sequencing data we have might be used to call statistically phased haplotypes for this region (it's pretty densely genotyped). Conducting an analysis with information with the provided by haplotypes can probably get to the bottom of this, but should think more seriously about what it will provide before investing the time to figure it out.
+
+Is an extremely recent duplication even another possible explanation for this weird pattern that we see.
 
 __Neutral structure outliers (strays) in halfpounders__  
 There is evidence that half pounders may return to Rogue despite being native to a different stream, then return to the their natal stream during their subsequent adult spawning run(s). Do we see evidence of any half-pounders from other streams (i.e. outlier fish at neutral loci). This behavior is also predicted as a consequence of the proposed explanation of the half pounder lifestyle as a behavioral adaptation to avoid a recurring region of high SSTs near the Klamath and Rogue basins
@@ -1123,7 +1607,7 @@ The results as presented here leave us with something of a problem, if field stu
 __Proportions__  
 do the assignment proportions in half pounder and fall run fish match with the run counts for the appropriately matched year?
 
-__pattern within fall__
+__pattern within fall__  
 we have dates for approximate freshwater entry for the fall run fish. is there a correlation in the winter-vs-summer genetic axis and date of entry? there is substantial overlap in the entry timing of fish referred to as winter and late-summer run, and substantial interannual variation in the peak of run timing within a group, taken together this suggests that some late late-summer fish could instead be early-arriving winter run fish. this would show up as a correlation between run timing genotype and arrival date with the fall fish. let's check real quick
 
 
@@ -1177,3 +1661,74 @@ summary(lm(LD1~as.numeric(jdate), data=cor_data[cor_data$run=="fall",]))
 ```
 
 There is a significant, but minor trend (r2 = 0.03, p = 0.04) towards more genetically winter-like fish over time among fall run fish. 
+
+
+also look within halfpounders
+
+## other
+
+### interannual variation__  
+
+let's check to make sure there are no interesting patterns / structure among halfpounder years
+
+```{r, message=FALSE, warning=FALSE}
+# create the dataset
+half_genind <- seppop(genind_2.0)$halfpounder
+years <- str_sub(row.names(half_genind@tab), 6,7)
+half_genind$pop <- as.factor(years)
+
+# optimized number of pcs with optim.a.score, smart = F
+#half_dapc_year <- dapc(half_genind, n.pca = 200, n.da =1)
+#optim.a.score(half_dapc_year, smart = FALSE)
+half_dapc_year <- dapc(half_genind, n.pca = 31, n.da =1)
+scatter.dapc(half_dapc_year)
+```
+
+Even with DAPC, very little structure year to year in halfpounders.
+
+### data export  
+
+```{r, eval = FALSE}
+#merge polarized allele count data with sample site, population	year	sample date	sample location	genotyped based on the 9 loci in bold-face type	origin
+
+# first get the assignments
+ld1_2 <- as.data.frame(dapc_full_apriori$ind.coord) %>%
+  rownames_to_column(var="sample") %>%
+  left_join(pops_info)
+
+# assignments using original DAPC
+CIs <- ld1_2 %>%
+  group_by(pop) %>%
+  summarise(loCI = quantile(LD1, probs = 0.025),
+            hiCI = quantile(LD1, probs = 0.975))
+
+#number of half pounders that fall in the 95% credible interval for winter fish assignment
+assn <- ld1_2 %>%
+  mutate(assignment = case_when(
+    LD1 < CIs$hiCI[4]  ~ "winter", 
+    LD1 > CIs$loCI[3] ~ "summer", 
+    LD1 <= CIs$loCI[3] & LD1 >= CIs$hiCI[4] ~ "unassigned")) %>%
+  select(sample, assignment)
+
+#get hor/nor
+md <- readxl::read_xlsx("./metadata/Omy Rogue2019 steelhead datasheets.xlsx", sheet = 4)
+
+md <- md %>%
+  mutate(Origin = case_when(
+    Origin == "AD" ~ "HOR",
+    Origin == "1" ~ "NOR",
+    TRUE ~ Origin
+    
+  ))
+
+to_exp <- polarized_allele_counts %>%
+  rownames_to_column(var = "sample") %>%
+  left_join(assn) %>%
+  left_join(select(genos_2.2, Sample, Date, run , year), by = c("sample" = "Sample")) %>%
+  left_join(select(md, SFGL_ID, Origin), by = c("sample" = "SFGL_ID"))
+
+write_tsv(to_exp, "genotype_data/chr28_polarized_allele_counts_2.txt")
+
+```
+
+
